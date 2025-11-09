@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/useSupabaseAuth";
-import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
+import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/supabaseConst";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { Loader2 } from "lucide-react";

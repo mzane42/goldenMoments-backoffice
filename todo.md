@@ -9,11 +9,11 @@
 - [x] Remplacer les helpers Drizzle par des requêtes Supabase (server/db.ts)
 - [x] Adapter les procédures tRPC pour utiliser Supabase (server/supabaseRouters.ts)
 - [x] Créer le guide de migration complet (SUPABASE_MIGRATION_GUIDE.md)
-- [ ] Exécuter le script SQL dans Supabase pour créer les tables
-- [ ] Connecter les nouveaux fichiers Supabase au serveur principal
-- [ ] Mettre à jour les composants UI pour utiliser useSupabaseAuth()
-- [ ] Tester l'authentification Supabase
-- [ ] Tester les permissions RLS
+- [x] Exécuter le script SQL dans Supabase pour créer les tables
+- [x] Connecter les nouveaux fichiers Supabase au serveur principal
+- [x] Mettre à jour les composants UI pour utiliser useSupabaseAuth()
+- [x] Tester l'authentification Supabase
+- [x] Tester les permissions RLS
 
 ## Configuration Initiale
 - [x] Configurer le schéma de base de données avec tables admins et hotel_partners
@@ -44,9 +44,9 @@
 - [x] Corriger les erreurs TypeScript dans oauth.ts et sdk.ts
 - [x] Créer la page de connexion Supabase (Login.tsx)
 - [x] Mettre à jour le client tRPC pour envoyer le token Supabase
-- [ ] Exécuter le script SQL dans Supabase pour créer les tables
-- [ ] Créer les comptes admin et partenaires dans Supabase
-- [ ] Tester la connexion et les permissions
+- [x] Exécuter le script SQL dans Supabase pour créer les tables
+- [x] Créer les comptes admin et partenaires dans Supabase
+- [x] Tester la connexion et les permissions
 
 
 ## Mise à jour du guide de migration

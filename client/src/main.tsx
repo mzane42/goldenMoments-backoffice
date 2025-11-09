@@ -5,7 +5,7 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createRoot } from "react-dom/client";
 import superjson from "superjson";
 import App from "./App";
-import { getLoginUrl } from "./const";
+import { getLoginUrl } from "./supabaseConst";
 import { SupabaseAuthProvider } from "./contexts/SupabaseAuthContext";
 import "./index.css";
 

@@ -83,8 +83,8 @@ L'interface partenaire offre un accès limité et sécurisé aux données propre
 
 - **Frontend** : React 19 + TypeScript + Tailwind CSS 4
 - **Backend** : Express 4 + tRPC 11
-- **Base de données** : MySQL/TiDB via Drizzle ORM
-- **Authentification** : Manus OAuth avec gestion des rôles
+- **Base de données** : PostgreSQL via Supabase
+- **Authentification** : Supabase Auth avec gestion des rôles
 - **UI Components** : shadcn/ui
 - **État** : React hooks + tRPC client
 
@@ -109,12 +109,10 @@ golden-moments-backoffice/
 │   │   └── App.tsx          # Routes principales
 │   └── public/              # Assets statiques
 ├── server/                   # Backend Express + tRPC
-│   ├── routers.ts           # Procédures tRPC
+│   ├── supabaseRouters.ts   # Procédures tRPC
 │   ├── db.ts                # Helpers base de données
+│   ├── supabase.ts          # Client Supabase admin
 │   └── _core/               # Infrastructure
-├── drizzle/                 # Schéma et migrations
-│   ├── schema.ts            # Définition des tables
-│   └── migrations/          # Fichiers de migration SQL
 └── shared/                  # Types et constantes partagés
 ```
 
@@ -308,58 +306,65 @@ export async function getReservationsByCompany(company: string) {
 ### Prérequis
 
 - Node.js 18+ et pnpm
-- Accès à une base de données MySQL/TiDB
-- Compte Manus pour l'authentification OAuth
+- Projet Supabase configuré (PostgreSQL + Auth)
 
 ### Installation
 
-1. **Cloner le projet** (déjà fait si vous utilisez le système Manus)
+1. **Cloner le projet**
 
 2. **Installer les dépendances**
 ```bash
 pnpm install
 ```
 
-3. **Configurer la base de données**
+3. **Configurer les variables d'environnement**
 
-Les variables d'environnement sont automatiquement injectées par le système Manus. Vous devez cependant exécuter les migrations :
+Créez un fichier `.env` à la racine du projet :
 
 ```bash
-# Via l'interface de gestion de base de données Manus
-# Ou manuellement via le fichier SQL fourni
+# Supabase
+SUPABASE_URL="https://xxx.supabase.co"
+SUPABASE_ANON_KEY="eyJ..."
+SUPABASE_SERVICE_ROLE_KEY="eyJ..."
+
+# Frontend (client-side)
+VITE_SUPABASE_URL="https://xxx.supabase.co"
+VITE_SUPABASE_ANON_KEY="eyJ..."
 ```
 
-Le fichier `drizzle/migrations/0001_schema_update.sql` contient toutes les migrations nécessaires.
+4. **Configurer la base de données**
 
-4. **Créer les comptes administrateurs et partenaires**
+Exécutez le schéma SQL dans votre projet Supabase (voir `archive/migration-docs/` pour les fichiers de migration).
 
-Utilisez l'interface de gestion de base de données pour insérer les premiers comptes :
+5. **Créer les comptes administrateurs et partenaires**
+
+Utilisez l'interface Supabase pour créer les comptes :
 
 ```sql
 -- Créer un super admin
-INSERT INTO admins (authId, fullName, email, role, isActive)
-VALUES ('auth_id_from_manus', 'Votre Nom', 'admin@goldenmoments.com', 'super_admin', true);
+INSERT INTO admins (auth_id, full_name, email, role, is_active)
+VALUES ('uuid_from_supabase_auth', 'Votre Nom', 'admin@goldenmoments.com', 'super_admin', true);
 
 -- Créer un partenaire hôtel
-INSERT INTO hotelPartners (authId, hotelName, company, contactName, email, status)
-VALUES ('auth_id_from_manus', 'Hôtel Plaza', 'Plaza Athénée Paris', 'Jean Dupont', 'contact@plaza.com', 'active');
+INSERT INTO hotel_partners (auth_id, hotel_name, company, contact_name, email, status)
+VALUES ('uuid_from_supabase_auth', 'Hôtel Plaza', 'Plaza Athénée Paris', 'Jean Dupont', 'contact@plaza.com', 'active');
 ```
 
-**Important** : L'`authId` doit correspondre à l'ID OAuth de l'utilisateur dans le système Manus. L'utilisateur doit d'abord se connecter une fois pour que son compte soit créé dans la table `users`, puis vous pouvez récupérer son `authId` et l'ajouter aux tables `admins` ou `hotelPartners`.
+**Important** : L'`auth_id` doit correspondre à l'UUID de l'utilisateur dans `auth.users` de Supabase.
 
-5. **Lancer le serveur de développement**
+6. **Lancer le serveur de développement**
 
 ```bash
 pnpm dev
 ```
 
-Le backoffice sera accessible à l'URL fournie par le système Manus.
+Le backoffice sera accessible sur `http://localhost:3000`.
 
 ## 📝 Guide d'Utilisation
 
 ### Pour les Administrateurs
 
-1. **Connexion** : Cliquez sur "Se connecter" et utilisez vos identifiants Manus
+1. **Connexion** : Cliquez sur "Se connecter" et utilisez vos identifiants Supabase
 2. **Dashboard** : Accédez au tableau de bord pour voir les KPIs et statistiques
 3. **Gestion des réservations** : 
    - Filtrez par statut, dates, hôtel
@@ -377,7 +382,7 @@ Le backoffice sera accessible à l'URL fournie par le système Manus.
 
 ### Pour les Partenaires Hôteliers
 
-1. **Connexion** : Utilisez vos identifiants Manus fournis par l'administrateur
+1. **Connexion** : Utilisez vos identifiants Supabase fournis par l'administrateur
 2. **Dashboard** : Consultez vos revenus et performances
 3. **Mes expériences** :
    - Modifiez prix et disponibilités
@@ -397,12 +402,11 @@ Le backoffice sera accessible à l'URL fournie par le système Manus.
 
 ### Ajouter une nouvelle fonctionnalité
 
-1. **Mettre à jour le schéma** dans `drizzle/schema.ts`
-2. **Exécuter la migration** : `pnpm db:push`
-3. **Ajouter les helpers** dans `server/db.ts`
-4. **Créer les procédures tRPC** dans `server/routers.ts`
-5. **Créer les composants UI** dans `client/src/pages/`
-6. **Ajouter les routes** dans `client/src/App.tsx`
+1. **Mettre à jour le schéma** dans Supabase (SQL Editor ou Table Editor)
+2. **Ajouter les helpers** dans `server/db.ts`
+3. **Créer les procédures tRPC** dans `server/supabaseRouters.ts`
+4. **Créer les composants UI** dans `client/src/pages/`
+5. **Ajouter les routes** dans `client/src/App.tsx`
 
 ### Structure des procédures tRPC
 
@@ -455,12 +459,12 @@ Ces données sont accessibles via :
 
 ### Bonnes Pratiques Implémentées
 
-- ✅ **Authentification OAuth** via Manus
+- ✅ **Authentification** via Supabase Auth
 - ✅ **Middleware de vérification des rôles** sur toutes les routes protégées
 - ✅ **Filtrage des données** au niveau base de données (RLS)
 - ✅ **Validation des inputs** avec Zod
 - ✅ **Protection CSRF** via tRPC
-- ✅ **Sessions sécurisées** avec cookies HTTP-only
+- ✅ **Sessions sécurisées** gérées par Supabase
 - ✅ **Sanitization** des données utilisateur
 
 ### Recommandations
@@ -474,23 +478,23 @@ Ces données sont accessibles via :
 
 ### Problème : "Accès non autorisé"
 
-**Solution** : Vérifiez que l'utilisateur a bien un enregistrement dans la table `admins` ou `hotelPartners` avec le bon `authId`.
+**Solution** : Vérifiez que l'utilisateur a bien un enregistrement dans la table `admins` ou `hotel_partners` avec le bon `auth_id`.
 
 ### Problème : Les données ne s'affichent pas
 
-**Solution** : 
-1. Vérifiez que les migrations ont été exécutées
+**Solution** :
+1. Vérifiez que le schéma a été créé dans Supabase
 2. Vérifiez que les données existent dans la base
 3. Consultez la console du navigateur pour les erreurs tRPC
 
 ### Problème : Erreur de connexion à la base de données
 
-**Solution** : Les variables d'environnement sont gérées automatiquement par Manus. Si le problème persiste, contactez le support.
+**Solution** : Vérifiez vos variables d'environnement Supabase dans le fichier `.env`.
 
 ## 📚 Documentation Complémentaire
 
 - [Documentation tRPC](https://trpc.io/)
-- [Documentation Drizzle ORM](https://orm.drizzle.team/)
+- [Documentation Supabase](https://supabase.com/docs)
 - [Documentation shadcn/ui](https://ui.shadcn.com/)
 - [Documentation Tailwind CSS](https://tailwindcss.com/)
 

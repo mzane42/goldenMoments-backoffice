@@ -1,5 +1,5 @@
 import { useAuth } from "@/hooks/useSupabaseAuth";
-import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/const";
+import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/supabaseConst";
 import { trpc } from "@/lib/trpc";
 import {
   BarChart3,
@@ -36,10 +36,9 @@ const navigation = [
 ];
 
 export default function PartnerLayout({ children }: PartnerLayoutProps) {
-  const { user, loading, isAuthenticated } = useAuth();
+  const { user, loading, isAuthenticated, logout } = useAuth();
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const logoutMutation = trpc.auth.logout.useMutation();
   const { data: roleCheck, isLoading: roleLoading } = trpc.auth.checkRole.useQuery(
     undefined,
     { enabled: isAuthenticated }
@@ -58,7 +57,7 @@ export default function PartnerLayout({ children }: PartnerLayoutProps) {
   }, [roleLoading, roleCheck]);
 
   const handleLogout = async () => {
-    await logoutMutation.mutateAsync();
+    await logout();
     window.location.href = getLoginUrl();
   };
 
