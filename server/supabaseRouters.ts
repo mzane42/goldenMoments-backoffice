@@ -224,8 +224,10 @@ export const appRouter = router({
       create: hotelPartnerProcedure
         .input(z.any())
         .mutation(async ({ input, ctx }) => {
+          // Partners can only create experiences as inactive
           const experience = await db.createExperience({
             ...input,
+            status: 'inactive', // Force status to inactive for partners
             company: ctx.partner.company,
             created_by: ctx.user.authId,
             last_modified_by: ctx.user.authId,
@@ -240,7 +242,7 @@ export const appRouter = router({
             price: z.number().optional(),
             date_start: z.string().optional(),
             date_end: z.string().optional(),
-            is_active: z.boolean().optional(),
+            // Partners cannot change status - removed is_active from allowed fields
           }),
         }))
         .mutation(async ({ input, ctx }) => {
@@ -250,8 +252,16 @@ export const appRouter = router({
             throw new Error("Expérience non trouvée ou accès refusé");
           }
           
+          // Partners cannot modify active experiences
+          if (experience.status === 'active') {
+            throw new Error("Les expériences actives ne peuvent pas être modifiées. Veuillez contacter l'équipe Golden Moments.");
+          }
+          
+          // Remove status from updates if present (partners shouldn't be able to change it)
+          const { status, ...safeUpdates } = input.updates as any;
+          
           await db.updateExperience(input.id, {
-            ...input.updates,
+            ...safeUpdates,
             last_modified_by: ctx.user.authId,
           });
           return { success: true };

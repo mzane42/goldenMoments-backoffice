@@ -75,7 +75,9 @@ export function DataTable<TData extends { id: string }>({
   emptyStateDescription = 'Aucun élément à afficher pour le moment.',
   emptyStateIcon,
 }: DataTableProps<TData>) {
-  const totalPages = Math.ceil(total / pageSize);
+  // Normalize pageSize to prevent division by zero
+  const normalizedPageSize = Math.max(1, Number(pageSize) || 1);
+  const totalPages = total > 0 ? Math.ceil(total / normalizedPageSize) : 0;
 
   // Loading skeleton
   if (loading && data.length === 0) {
@@ -97,7 +99,7 @@ export function DataTable<TData extends { id: string }>({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {Array.from({ length: pageSize }).map((_, index) => (
+              {Array.from({ length: normalizedPageSize }).map((_, index) => (
                 <TableRow key={index}>
                   {columns.map((column) => (
                     <TableCell key={column.id}>

@@ -99,6 +99,11 @@ export default function PartnerExperiences() {
   };
 
   const handleEdit = (experience: ExperienceWithRelations) => {
+    // Partners cannot edit active experiences
+    if (experience.status === 'active') {
+      toast.error('Les expériences actives ne peuvent pas être modifiées. Veuillez contacter l\'équipe Golden Moments.');
+      return;
+    }
     setEditingExperience(experience);
     setEditDialogOpen(true);
   };
@@ -255,6 +260,7 @@ export default function PartnerExperiences() {
           onSubmit={handleCreate}
           partners={[]}
           loading={createMutation.isPending}
+          isPartner={true}
         />
 
         {/* Edit Experience Dialog */}
@@ -266,6 +272,7 @@ export default function PartnerExperiences() {
           loading={updateMutation.isPending}
           initialData={editingExperience}
           mode="edit"
+          isPartner={true}
         />
       </div>
     </PartnerLayout>

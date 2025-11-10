@@ -165,16 +165,18 @@ export default function AdminExperiences() {
         {
           title: 'Évaluations',
           fields: [
-            { 
-              label: 'Note moyenne', 
-              value: (
+            {
+              label: 'Note moyenne',
+              value: selectedExperience.rating != null ? (
                 <div className="flex items-center gap-1">
                   <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                   <span>{selectedExperience.rating.toFixed(1)}</span>
                 </div>
-              ) 
+              ) : (
+                '-'
+              ),
             },
-            { label: "Nombre d'avis", value: selectedExperience.reviewCount },
+            { label: "Nombre d'avis", value: selectedExperience.reviewCount ?? 0 },
           ],
         },
         {

@@ -102,8 +102,12 @@ export function DataTablePagination({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => onPageChange(totalPages)}
-          disabled={page >= totalPages}
+          onClick={() => {
+            if (totalPages > 0) {
+              onPageChange(totalPages);
+            }
+          }}
+          disabled={page >= totalPages || totalPages === 0}
           className="hidden h-8 w-8 p-0 lg:flex"
         >
           <span className="sr-only">Aller à la dernière page</span>

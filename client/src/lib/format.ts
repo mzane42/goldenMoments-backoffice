@@ -17,7 +17,8 @@ import type {
 /**
  * Format currency in EUR
  */
-export function formatCurrency(amount: number, currency: string = 'EUR'): string {
+export function formatCurrency(amount: number | null | undefined, currency: string = 'EUR'): string {
+  if (amount === null || amount === undefined || !isFinite(amount)) return '-';
   return new Intl.NumberFormat('fr-FR', {
     style: 'currency',
     currency,

@@ -54,13 +54,11 @@ export function useTableState({
     const timer = setTimeout(() => {
       setDebouncedSearchValue(searchValue);
       // Reset to first page when search changes
-      if (searchValue !== debouncedSearchValue) {
-        setPage(1);
-      }
+      setPage(1);
     }, searchDebounceMs);
 
     return () => clearTimeout(timer);
-  }, [searchValue, searchDebounceMs, debouncedSearchValue]);
+  }, [searchValue, searchDebounceMs]);
 
   // Reset to first page when page size changes
   const handlePageSizeChange = useCallback((newPageSize: number) => {

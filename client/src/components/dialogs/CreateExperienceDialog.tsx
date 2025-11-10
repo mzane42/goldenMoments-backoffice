@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { MarkdownEditor } from '@/components/ui/markdown-editor';
+import { MDXEditorComponent } from '@/components/ui/mdxeditor';
 import {
   Select,
   SelectContent,
@@ -42,6 +42,7 @@ export interface CreateExperienceDialogProps {
   loading?: boolean;
   initialData?: any; // Experience data for edit mode
   mode?: 'create' | 'edit';
+  isPartner?: boolean; // If true, applies partner restrictions
 }
 
 const CATEGORIES = [
@@ -63,8 +64,11 @@ export function CreateExperienceDialog({
   loading = false,
   initialData,
   mode = 'create',
+  isPartner = false,
 }: CreateExperienceDialogProps) {
   const isEditMode = mode === 'edit' && initialData;
+  const isActiveExperience = isEditMode && initialData?.status === 'active';
+  const isReadOnly = isPartner && isActiveExperience;
   const {
     register,
     handleSubmit,
@@ -111,7 +115,7 @@ export function CreateExperienceDialog({
       date_start: '',
       date_end: '',
       company: '',
-      status: 'active',
+      status: isPartner ? 'inactive' : 'active',
       partner_id: undefined,
     },
   });
@@ -124,14 +128,16 @@ export function CreateExperienceDialog({
   const [newImage, setNewImage] = React.useState('');
   const [newAmenity, setNewAmenity] = React.useState('');
 
+  const currentPartnerId = initialData?.partner_id ?? initialData?.partnerId;
+
   // Merge partners list with current assigned partner (if editing and partner not in list)
   const displayPartners = React.useMemo(() => {
-    if (!isEditMode || !initialData?.partner_id) {
+    if (!isEditMode || !currentPartnerId) {
       return partners;
     }
     
     // Check if current partner is already in the list
-    const partnerExists = partners.some(p => p.id === initialData.partner_id);
+    const partnerExists = partners.some((p) => p.id === currentPartnerId);
     if (partnerExists) {
       return partners;
     }
@@ -139,37 +145,59 @@ export function CreateExperienceDialog({
     // If partner not in list, add it with a placeholder name
     // This can happen if the partner is from a different company or was deleted
     return [
-      { id: initialData.partner_id, hotelName: '(Partenaire actuel)' },
+      { id: currentPartnerId, hotelName: '(Partenaire actuel)' },
       ...partners,
     ];
-  }, [isEditMode, initialData, partners]);
+  }, [currentPartnerId, isEditMode, partners]);
 
   // Populate form when editing
   React.useEffect(() => {
-    if (isEditMode && initialData) {
-      reset({
-        title: initialData.title || '',
-        description: initialData.description || '',
-        long_description: initialData.long_description || '',
-        price: initialData.price || 0,
-        images: initialData.images || [],
-        image_url: initialData.image_url || '',
-        category: initialData.category || 'hotel',
-        location: initialData.location || { area: '', city: '', latitude: 0, longitude: 0 },
-        items: initialData.items || { amenities: [] },
-        check_in_info: initialData.check_in_info || { check_in: '', check_out: '' },
-        transportation: initialData.transportation || { parking: '', nearest_airport: { name: '', distance: '' } },
-        accessibility: initialData.accessibility || { elevator: false, accessible_rooms: false, wheelchair_accessible: false },
-        additional_info: initialData.additional_info || { pets_allowed: false, smoking_policy: '', languages_spoken: [] },
-        schedules: initialData.schedules || { breakfast: '', dinner: '', pool: '', fitness_center: '' },
-        date_start: initialData.date_start || '',
-        date_end: initialData.date_end || '',
-        company: initialData.company || '',
-        status: initialData.status || 'active',
-        partner_id: initialData.partner_id || undefined,
-      });
-    }
-  }, [isEditMode, initialData, reset]);
+    if (!isEditMode || !initialData) return;
+
+    reset({
+      title: initialData.title ?? '',
+      description: initialData.description ?? '',
+      long_description:
+        initialData.long_description ?? initialData.longDescription ?? '',
+      price: initialData.price ?? 0,
+      images: initialData.images ?? [],
+      image_url: initialData.image_url ?? initialData.imageUrl ?? '',
+      category: initialData.category ?? 'hotel',
+      location:
+        initialData.location ?? { area: '', city: '', latitude: 0, longitude: 0 },
+      items: initialData.items ?? { amenities: [] },
+      check_in_info:
+        initialData.check_in_info ??
+        initialData.checkInInfo ?? { check_in: '', check_out: '' },
+      transportation:
+        initialData.transportation ?? {
+          parking: '',
+          nearest_airport: { name: '', distance: '' },
+        },
+      accessibility:
+        initialData.accessibility ?? {
+          elevator: false,
+          accessible_rooms: false,
+          wheelchair_accessible: false,
+        },
+      additional_info:
+        initialData.additional_info ??
+        initialData.additionalInfo ?? {
+          pets_allowed: false,
+          smoking_policy: '',
+          languages_spoken: [],
+        },
+      schedules:
+        initialData.schedules ??
+        initialData.schedules ??
+        { breakfast: '', dinner: '', pool: '', fitness_center: '' },
+      date_start: initialData.date_start ?? initialData.dateStart ?? '',
+      date_end: initialData.date_end ?? initialData.dateEnd ?? '',
+      company: initialData.company ?? '',
+      status: initialData.status ?? (isPartner ? 'inactive' : 'active'),
+      partner_id: currentPartnerId ?? undefined,
+    });
+  }, [currentPartnerId, initialData, isEditMode, isPartner, reset]);
 
   const addImage = () => {
     if (newImage.trim()) {
@@ -212,6 +240,9 @@ export function CreateExperienceDialog({
   };
 
   const handleFormSubmit = async (data: CreateExperienceInput) => {
+    if (isReadOnly) {
+      return; // Prevent submission for active experiences when partner
+    }
     try {
       if (isEditMode && initialData?.id) {
         await onSubmit({ ...data, id: initialData.id });
@@ -236,15 +267,32 @@ export function CreateExperienceDialog({
             {isEditMode ? 'Modifier l\'expérience' : 'Créer une nouvelle expérience'}
           </DialogTitle>
           <DialogDescription className="text-base">
-            {isEditMode 
-              ? 'Modifiez les informations de l\'expérience. Les champs marqués d\'un * sont obligatoires.'
-              : 'Remplissez tous les champs nécessaires. Les champs marqués d\'un * sont obligatoires.'
+            {isReadOnly
+              ? 'Cette expérience est active et ne peut pas être modifiée. Veuillez contacter l\'équipe Golden Moments pour toute modification.'
+              : isEditMode 
+                ? 'Modifiez les informations de l\'expérience. Les champs marqués d\'un * sont obligatoires.'
+                : 'Remplissez tous les champs nécessaires. Les champs marqués d\'un * sont obligatoires.'
             }
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit(handleFormSubmit)} className="flex flex-col h-full">
           <ScrollArea className="flex-1 px-6">
+            {isReadOnly && (
+              <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <Info className="h-5 w-5 text-yellow-600 dark:text-yellow-400 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                      Expérience active - Modification non autorisée
+                    </p>
+                    <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
+                      Les expériences actives ne peuvent pas être modifiées par les partenaires. Veuillez contacter l'équipe Golden Moments pour toute modification.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
             <Tabs defaultValue="general" className="w-full">
               <TabsList className="grid w-full grid-cols-5 mb-6">
                 <TabsTrigger value="general">Général</TabsTrigger>
@@ -265,6 +313,7 @@ export function CreateExperienceDialog({
                       {...register('title')}
                       placeholder="Ex: SPA & Gourmandise"
                       className={errors.title ? 'border-destructive' : ''}
+                      disabled={isReadOnly}
                     />
                     {errors.title && (
                       <p className="text-sm text-destructive">{errors.title.message}</p>
@@ -277,7 +326,7 @@ export function CreateExperienceDialog({
                       name="category"
                       control={control}
                       render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
+                        <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
                           <SelectTrigger className={errors.category ? 'border-destructive' : ''}>
                             <SelectValue />
                           </SelectTrigger>
@@ -306,33 +355,35 @@ export function CreateExperienceDialog({
                     placeholder="Description concise affichée dans les listes"
                     rows={3}
                     className={errors.description ? 'border-destructive' : ''}
+                    disabled={isReadOnly}
                   />
                   {errors.description && (
                     <p className="text-sm text-destructive">{errors.description.message}</p>
                   )}
                 </div>
 
-                {/* Long Description (Markdown) */}
+                {/* Long Description (Rich Text) */}
                 <div className="space-y-2">
-                  <Controller
-                    name="long_description"
-                    control={control}
-                    render={({ field }) => (
-                      <MarkdownEditor
-                        label="Description détaillée (Markdown)"
-                        value={field.value || ''}
-                        onChange={field.onChange}
-                        placeholder="**Titre**&#10;&#10;Découvrez...&#10;&#10;- Point 1&#10;- Point 2"
-                        rows={15}
-                      />
-                    )}
-                  />
+                    <Controller
+                      name="long_description"
+                      control={control}
+                      render={({ field }) => (
+                        <MDXEditorComponent
+                          label="Description détaillée"
+                          value={field.value || ''}
+                          onChange={field.onChange}
+                          placeholder="Écrivez une description détaillée de l'expérience. Utilisez la barre d'outils pour formater votre texte..."
+                          rows={15}
+                          disabled={isReadOnly}
+                        />
+                      )}
+                    />
                 </div>
 
                 <Separator />
 
                 {/* Price & Status */}
-                <div className="grid grid-cols-3 gap-4">
+                <div className={`grid gap-4 ${isPartner ? 'grid-cols-2' : 'grid-cols-3'}`}>
                   <div className="space-y-2">
                     <Label htmlFor="price">Prix (EUR) *</Label>
                     <Input
@@ -343,30 +394,33 @@ export function CreateExperienceDialog({
                       {...register('price', { valueAsNumber: true })}
                       placeholder="0.00"
                       className={errors.price ? 'border-destructive' : ''}
+                      disabled={isReadOnly}
                     />
                     {errors.price && (
                       <p className="text-sm text-destructive">{errors.price.message}</p>
                     )}
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="status">Statut</Label>
-                    <Controller
-                      name="status"
-                      control={control}
-                      render={({ field }) => (
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="active">Actif</SelectItem>
-                            <SelectItem value="inactive">Inactif</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
+                  {!isPartner && (
+                    <div className="space-y-2">
+                      <Label htmlFor="status">Statut</Label>
+                      <Controller
+                        name="status"
+                        control={control}
+                        render={({ field }) => (
+                          <Select value={field.value} onValueChange={field.onChange} disabled={isReadOnly}>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="active">Actif</SelectItem>
+                              <SelectItem value="inactive">Inactif</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        )}
+                      />
+                    </div>
+                  )}
 
                   <div className="space-y-2">
                     <Label htmlFor="company">Entreprise</Label>
@@ -865,7 +919,7 @@ export function CreateExperienceDialog({
             >
               Annuler
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading || isReadOnly}>
               {loading 
                 ? (isEditMode ? 'Modification en cours...' : 'Création en cours...') 
                 : (isEditMode ? 'Modifier l\'expérience' : 'Créer l\'expérience')

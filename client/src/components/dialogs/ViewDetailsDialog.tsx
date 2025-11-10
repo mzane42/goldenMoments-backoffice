@@ -72,7 +72,7 @@ export function ViewDetailsDialog({
                         {field.label}
                       </dt>
                       <dd className="text-sm text-foreground">
-                        {field.value || '-'}
+                      {field.value === null || field.value === undefined ? '-' : field.value}
                       </dd>
                     </div>
                   ))}

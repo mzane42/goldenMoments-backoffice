@@ -112,25 +112,32 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
           {/* Navigation */}
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-            {navigation.map((item) => {
-              const isActive = location === item.href;
-              const Icon = item.icon;
+            {(() => {
+              // Find the best matching route (longest matching prefix) - calculate once
+              const matchingRoute = navigation
+                .filter((nav) => location === nav.href || location.startsWith(nav.href + "/"))
+                .sort((a, b) => b.href.length - a.href.length)[0];
               
-              return (
-                <Link key={item.name} href={item.href}>
-                  <a
-                    className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                    }`}
-                  >
-                    <Icon className="h-5 w-5 shrink-0" />
-                    <span>{item.name}</span>
-                  </a>
-                </Link>
-              );
-            })}
+              return navigation.map((item) => {
+                const isActive = matchingRoute?.href === item.href;
+                const Icon = item.icon;
+                
+                return (
+                  <Link key={item.name} href={item.href}>
+                    <a
+                      className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      }`}
+                    >
+                      <Icon className="h-5 w-5 shrink-0" />
+                      <span>{item.name}</span>
+                    </a>
+                  </Link>
+                );
+              });
+            })()}
           </nav>
 
           {/* User menu */}
