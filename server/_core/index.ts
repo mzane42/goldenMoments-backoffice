@@ -7,27 +7,6 @@ import { appRouter } from "../supabaseRouters";
 import { createContext } from "./supabaseContext";
 import { serveStatic, setupVite } from "./vite";
 
-// Validate required environment variables
-function validateEnv() {
-  const required = [
-    "SUPABASE_URL",
-    "SUPABASE_ANON_KEY",
-    "SUPABASE_SERVICE_ROLE_KEY",
-    "JWT_SECRET",
-  ];
-  
-  const missing = required.filter(key => !process.env[key]);
-  
-  if (missing.length > 0) {
-    console.error("❌ Missing required environment variables:");
-    missing.forEach(key => console.error(`   - ${key}`));
-    console.error("\nPlease set these variables in Railway dashboard → Variables tab");
-    process.exit(1);
-  }
-  
-  console.log("✅ All required environment variables are set");
-}
-
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
     const server = net.createServer();
@@ -48,21 +27,11 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
-  // Validate environment variables before starting
-  validateEnv();
-  
   const app = express();
   const server = createServer(app);
-  
-  // Health check endpoint (for Railway)
-  app.get("/health", (_req, res) => {
-    res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
-  });
-  
   // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  
   // tRPC API
   app.use(
     "/api/trpc",
@@ -71,7 +40,6 @@ async function startServer() {
       createContext,
     })
   );
-  
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
@@ -86,9 +54,8 @@ async function startServer() {
     console.log(`Port ${preferredPort} is busy, using port ${port} instead`);
   }
 
-  server.listen(port, "0.0.0.0", () => {
-    console.log(`Server running on http://0.0.0.0:${port}/`);
-    console.log(`Health check available at http://0.0.0.0:${port}/health`);
+  server.listen(port, () => {
+    console.log(`Server running on http://localhost:${port}/`);
   });
 }
 
