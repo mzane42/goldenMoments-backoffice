@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: golden-moments-backoffice
+    env: node
+    buildCommand: pnpm install && pnpm build
+    startCommand: pnpm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        sync: false
+    healthCheckPath: /
+    plan: free
+
