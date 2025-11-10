@@ -105,7 +105,7 @@ export default function Home() {
           {/* Footer */}
           <div className="mt-8 pt-6 border-t border-border">
             <p className="text-xs text-muted-foreground">
-              © 2024 Golden Moments. Tous droits réservés.
+              © 2025 Golden Moments. Tous droits réservés.
             </p>
           </div>
         </div>

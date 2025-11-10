@@ -508,4 +508,4 @@ Pour toute question ou problème :
 
 ## 📄 Licence
 
-© 2024 Golden Moments. Tous droits réservés.
+© 2025 Golden Moments. Tous droits réservés.
