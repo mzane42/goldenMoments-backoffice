@@ -788,3 +788,222 @@ export async function getHotelRevenue(company: string) {
     previousMonthBookings
   };
 }
+
+// =====================================================
+// ROOM TYPES
+// =====================================================
+
+export async function getRoomTypesByExperience(experienceId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('room_types')
+    .select('*')
+    .eq('experience_id', experienceId)
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    console.error('[Database] Error getting room types:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function getRoomTypeById(id: string) {
+  const { data, error } = await supabaseAdmin
+    .from('room_types')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('[Database] Error getting room type:', error);
+    return undefined;
+  }
+
+  return data;
+}
+
+export async function createRoomType(roomType: {
+  experience_id: string;
+  name: string;
+  description?: string;
+  base_capacity?: number;
+  max_capacity?: number;
+  amenities?: any;
+  images?: string[];
+}) {
+  const { data, error } = await supabaseAdmin
+    .from('room_types')
+    .insert(roomType)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[Database] Error creating room type:', error);
+    throw new Error('Failed to create room type');
+  }
+
+  return data;
+}
+
+export async function updateRoomType(id: string, updates: Partial<{
+  name: string;
+  description: string;
+  base_capacity: number;
+  max_capacity: number;
+  amenities: any;
+  images: string[];
+}>) {
+  const { data, error } = await supabaseAdmin
+    .from('room_types')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('[Database] Error updating room type:', error);
+    throw new Error('Failed to update room type');
+  }
+
+  return data;
+}
+
+export async function deleteRoomType(id: string) {
+  const { error } = await supabaseAdmin
+    .from('room_types')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[Database] Error deleting room type:', error);
+    throw new Error('Failed to delete room type');
+  }
+
+  return true;
+}
+
+// =====================================================
+// AVAILABILITY PERIODS
+// =====================================================
+
+export async function getAvailabilityByDateRange(
+  experienceId: string,
+  startDate: string,
+  endDate: string,
+  roomTypeId?: string
+) {
+  let query = supabaseAdmin
+    .from('availability_periods')
+    .select('*, room_types(*)')
+    .eq('experience_id', experienceId)
+    .gte('date', startDate)
+    .lte('date', endDate);
+
+  if (roomTypeId) {
+    query = query.eq('room_type_id', roomTypeId);
+  }
+
+  query = query.order('date', { ascending: true });
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('[Database] Error getting availability:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function getAvailabilityForDate(
+  experienceId: string,
+  date: string,
+  roomTypeId?: string
+) {
+  let query = supabaseAdmin
+    .from('availability_periods')
+    .select('*, room_types(*)')
+    .eq('experience_id', experienceId)
+    .eq('date', date);
+
+  if (roomTypeId) {
+    query = query.eq('room_type_id', roomTypeId);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    console.error('[Database] Error getting availability for date:', error);
+    return [];
+  }
+
+  return data || [];
+}
+
+export async function upsertAvailabilityPeriods(periods: Array<{
+  id?: string;
+  experience_id: string;
+  room_type_id: string;
+  date: string;
+  price: number;
+  original_price: number;
+  available_rooms: number;
+  is_available: boolean;
+}>) {
+  const { data, error } = await supabaseAdmin
+    .from('availability_periods')
+    .upsert(periods, {
+      onConflict: 'experience_id,room_type_id,date'
+    })
+    .select();
+
+  if (error) {
+    console.error('[Database] Error upserting availability periods:', error);
+    throw new Error('Failed to upsert availability periods');
+  }
+
+  return data || [];
+}
+
+export async function deleteAvailabilityPeriod(id: string) {
+  const { error } = await supabaseAdmin
+    .from('availability_periods')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[Database] Error deleting availability period:', error);
+    throw new Error('Failed to delete availability period');
+  }
+
+  return true;
+}
+
+export async function getAvailabilitySummary(
+  experienceId: string,
+  month: number,
+  year: number
+) {
+  // Get first and last day of month
+  const startDate = new Date(year, month - 1, 1);
+  const endDate = new Date(year, month, 0);
+
+  const startDateStr = startDate.toISOString().split('T')[0];
+  const endDateStr = endDate.toISOString().split('T')[0];
+
+  const { data, error } = await supabaseAdmin
+    .from('availability_periods')
+    .select('date, room_type_id, is_available, available_rooms, price')
+    .eq('experience_id', experienceId)
+    .gte('date', startDateStr)
+    .lte('date', endDateStr)
+    .order('date', { ascending: true });
+
+  if (error) {
+    console.error('[Database] Error getting availability summary:', error);
+    return [];
+  }
+
+  return data || [];
+}

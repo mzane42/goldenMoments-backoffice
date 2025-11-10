@@ -189,6 +189,35 @@ export interface Waitlist {
   updatedAt: Timestamp;
 }
 
+// Room Type entity
+export interface RoomType {
+  id: UUID;
+  experienceId: UUID;
+  name: string;
+  description: string | null;
+  baseCapacity: number;
+  maxCapacity: number;
+  amenities: JSONB;
+  images: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// Availability Period entity
+export interface AvailabilityPeriod {
+  id: UUID;
+  experienceId: UUID;
+  roomTypeId: UUID;
+  date: string; // YYYY-MM-DD format
+  price: number;
+  originalPrice: number;
+  discountPercentage: number;
+  availableRooms: number;
+  isAvailable: boolean;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 // Extended types with relations for display purposes
 export interface ReservationWithRelations extends Reservation {
   user?: User;
@@ -203,6 +232,10 @@ export interface ReviewWithRelations extends Review {
   user?: User;
   experience?: Experience;
   reservation?: Reservation;
+}
+
+export interface AvailabilityPeriodWithRelations extends AvailabilityPeriod {
+  roomType?: RoomType;
 }
 
 // Pagination types

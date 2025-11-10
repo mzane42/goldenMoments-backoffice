@@ -65,6 +65,8 @@ jspm_packages/
 # Optional eslint cache
 .eslintcache
 
+docs/
+
 # Microbundle cache
 .rpt2_cache/
 .rts2_cache_cjs/

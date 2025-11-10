@@ -14,6 +14,7 @@ import AdminPartners from "./pages/admin/Partners";
 import PartnerDashboard from "./pages/partner/Dashboard";
 import PartnerReservations from "./pages/partner/Reservations";
 import PartnerExperiences from "./pages/partner/Experiences";
+import PartnerCalendar from "./pages/partner/Calendar";
 
 function Router() {
   return (
@@ -34,7 +35,7 @@ function Router() {
       {/* Routes Partenaire */}
       <Route path="/partner" component={PartnerDashboard} />
       <Route path="/partner/experiences" component={PartnerExperiences} />
-      <Route path="/partner/calendar" component={() => <div>Calendrier (à implémenter)</div>} />
+      <Route path="/partner/calendar" component={PartnerCalendar} />
       <Route path="/partner/reservations" component={PartnerReservations} />
       <Route path="/partner/revenue" component={() => <div>Mes Revenus (à implémenter)</div>} />
       <Route path="/partner/settings" component={() => <div>Paramètres Partenaire (à implémenter)</div>} />
