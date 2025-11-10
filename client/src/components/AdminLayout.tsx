@@ -35,7 +35,7 @@ const navigation = [
   { name: "Tableau de bord", href: "/admin", icon: Home },
   { name: "Réservations", href: "/admin/reservations", icon: Calendar },
   { name: "Expériences", href: "/admin/experiences", icon: ShoppingBag },
-  { name: "Utilisateurs", href: "/admin/users", icon: Users },
+  { name: "Clients", href: "/admin/users", icon: Users },
   { name: "Partenaires", href: "/admin/partners", icon: Building2 },
   // { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
   // { name: "Rapports", href: "/admin/reports", icon: FileText },

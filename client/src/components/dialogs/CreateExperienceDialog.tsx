@@ -33,7 +33,6 @@ import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { X, Plus, Upload, MapPin, Info } from 'lucide-react';
 import { createExperienceSchema, type CreateExperienceInput } from '@/../../shared/schemas/experience';
-import { cn } from '@/lib/utils';
 
 export interface CreateExperienceDialogProps {
   open: boolean;
@@ -231,9 +230,9 @@ export function CreateExperienceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl max-h-[90vh] p-0">
+      <DialogContent className="sm:max-w-[95vw] w-full max-h-[90vh] overflow-y-auto p-0">
         <DialogHeader className="px-6 pt-6 pb-4">
-          <DialogTitle className="text-2xl">
+          <DialogTitle className="text-2xl"> 
             {isEditMode ? 'Modifier l\'expérience' : 'Créer une nouvelle expérience'}
           </DialogTitle>
           <DialogDescription className="text-base">
@@ -264,7 +263,7 @@ export function CreateExperienceDialog({
                     <Input
                       id="title"
                       {...register('title')}
-                      placeholder="Ex: La Renaissance"
+                      placeholder="Ex: SPA & Gourmandise"
                       className={errors.title ? 'border-destructive' : ''}
                     />
                     {errors.title && (
