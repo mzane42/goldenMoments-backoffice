@@ -94,9 +94,9 @@ export const experiencesColumns: DataTableColumn<ExperienceWithRelations>[] = [
     cell: (row) => (
       <div className="flex items-center gap-1">
         <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-        <span className="font-medium">{row.rating.toFixed(1)}</span>
+        <span className="font-medium">{(row.rating ?? 0).toFixed(1)}</span>
         <span className="text-xs text-muted-foreground">
-          ({row.reviewCount})
+          ({row.reviewCount ?? 0})
         </span>
       </div>
     ),

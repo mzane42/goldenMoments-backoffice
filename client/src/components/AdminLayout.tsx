@@ -2,10 +2,10 @@ import { useAuth } from "@/hooks/useSupabaseAuth";
 import { APP_LOGO, APP_TITLE, getLoginUrl } from "@/supabaseConst";
 import { trpc } from "@/lib/trpc";
 import {
-  BarChart3,
+  // BarChart3,
   Building2,
   Calendar,
-  FileText,
+  // FileText,
   Home,
   LogOut,
   Menu,
@@ -17,7 +17,7 @@ import {
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Avatar, AvatarFallback } from "./ui/avatar";
-import { Button } from "./ui/button";
+// import { Button } from "./ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,8 +37,8 @@ const navigation = [
   { name: "Expériences", href: "/admin/experiences", icon: ShoppingBag },
   { name: "Utilisateurs", href: "/admin/users", icon: Users },
   { name: "Partenaires", href: "/admin/partners", icon: Building2 },
-  { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
-  { name: "Rapports", href: "/admin/reports", icon: FileText },
+  // { name: "Analytics", href: "/admin/analytics", icon: BarChart3 },
+  // { name: "Rapports", href: "/admin/reports", icon: FileText },
 ];
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
@@ -113,7 +113,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           {/* Navigation */}
           <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
             {navigation.map((item) => {
-              const isActive = location === item.href || location.startsWith(item.href + "/");
+              const isActive = location === item.href;
               const Icon = item.icon;
               
               return (

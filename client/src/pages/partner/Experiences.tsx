@@ -10,6 +10,7 @@ import { DataTableRowActions } from '@/components/data-table/DataTableRowActions
 import { experiencesColumns } from '@/components/data-table/columns/experiences-columns';
 import { ViewDetailsDialog, type DetailSection } from '@/components/dialogs/ViewDetailsDialog';
 import { DeleteConfirmDialog } from '@/components/dialogs/DeleteConfirmDialog';
+import { CreateExperienceDialog } from '@/components/dialogs/CreateExperienceDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useTableState } from '@/hooks/useTableState';
@@ -17,6 +18,7 @@ import { trpc } from '@/lib/trpc';
 import { Plus, ShoppingBag, Star } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ExperienceWithRelations } from '@/../../shared/types/entities';
+import type { CreateExperienceInput } from '@/../../shared/schemas/experience';
 import {
   formatCurrency,
   formatDate,
@@ -35,21 +37,61 @@ export default function PartnerExperiences() {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [deletingExperience, setDeletingExperience] = React.useState<ExperienceWithRelations | null>(null);
 
-  // Mock data for now - TODO: Replace with actual tRPC query filtered by partner
-  // const { data, isLoading, error } = trpc.partner.experiences.list.useQuery({
-  //   page: tableState.page,
-  //   pageSize: tableState.pageSize,
-  //   search: tableState.debouncedSearchValue,
-  //   sortColumn: tableState.sortConfig?.column,
-  //   sortDirection: tableState.sortConfig?.direction,
-  // });
+  // Create dialog state
+  const [createDialogOpen, setCreateDialogOpen] = React.useState(false);
 
-  const data = {
-    data: [] as ExperienceWithRelations[],
-    total: 0,
-  };
-  const isLoading = false;
-  const error = null;
+  // Edit dialog state
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false);
+  const [editingExperience, setEditingExperience] = React.useState<ExperienceWithRelations | null>(null);
+
+  // Fetch partner's experiences
+  const { data, isLoading, error, refetch } = trpc.partner.experiences.list.useQuery({
+    page: tableState.page,
+    pageSize: tableState.pageSize,
+    search: tableState.debouncedSearchValue,
+    sortColumn: tableState.sortConfig?.column,
+    sortDirection: tableState.sortConfig?.direction,
+  });
+
+  // Create mutation
+  const createMutation = trpc.partner.experiences.create.useMutation({
+    onSuccess: () => {
+      toast.success('Expérience créée avec succès');
+      setCreateDialogOpen(false);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Erreur: ${error.message}`);
+      console.error('Form submission error:', error);
+    },
+  });
+
+  // Update mutation
+  const updateMutation = trpc.partner.experiences.update.useMutation({
+    onSuccess: () => {
+      toast.success('Expérience modifiée avec succès');
+      setEditDialogOpen(false);
+      setEditingExperience(null);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Erreur: ${error.message}`);
+      console.error('Form submission error:', error);
+    },
+  });
+
+  // Delete mutation
+  const deleteMutation = trpc.partner.experiences.delete.useMutation({
+    onSuccess: () => {
+      toast.success('Expérience supprimée avec succès');
+      setDeleteDialogOpen(false);
+      setDeletingExperience(null);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
 
   const handleView = (experience: ExperienceWithRelations) => {
     setSelectedExperience(experience);
@@ -57,8 +99,8 @@ export default function PartnerExperiences() {
   };
 
   const handleEdit = (experience: ExperienceWithRelations) => {
-    // TODO Phase 2: Implement edit dialog
-    toast.info('Modification à implémenter');
+    setEditingExperience(experience);
+    setEditDialogOpen(true);
   };
 
   const handleDelete = (experience: ExperienceWithRelations) => {
@@ -68,10 +110,19 @@ export default function PartnerExperiences() {
 
   const confirmDelete = async () => {
     if (!deletingExperience) return;
-    // TODO: Implement actual delete
-    toast.success('Expérience supprimée avec succès');
-    setDeleteDialogOpen(false);
-    setDeletingExperience(null);
+    await deleteMutation.mutateAsync({ id: deletingExperience.id });
+  };
+
+  const handleCreate = async (data: CreateExperienceInput) => {
+    await createMutation.mutateAsync(data);
+  };
+
+  const handleUpdate = async (data: CreateExperienceInput & { id?: string }) => {
+    if (!data.id) return;
+    await updateMutation.mutateAsync({ 
+      id: parseInt(data.id), 
+      updates: data 
+    });
   };
 
   // Prepare view details sections
@@ -144,7 +195,7 @@ export default function PartnerExperiences() {
               Gérez toutes vos expériences proposées
             </p>
           </div>
-          <Button>
+          <Button onClick={() => setCreateDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Nouvelle expérience
           </Button>
@@ -153,12 +204,12 @@ export default function PartnerExperiences() {
         {/* DataTable */}
         <DataTable
           columns={experiencesColumns}
-          data={data.data}
+          data={data?.data || []}
           loading={isLoading}
           error={error?.message}
           page={tableState.page}
           pageSize={tableState.pageSize}
-          total={data.total}
+          total={data?.total || 0}
           onPageChange={tableState.setPage}
           onPageSizeChange={tableState.setPageSize}
           searchValue={tableState.searchValue}
@@ -194,7 +245,27 @@ export default function PartnerExperiences() {
           onConfirm={confirmDelete}
           title="Supprimer cette expérience ?"
           itemName={deletingExperience?.title}
-          loading={false}
+          loading={deleteMutation.isPending}
+        />
+
+        {/* Create Experience Dialog */}
+        <CreateExperienceDialog
+          open={createDialogOpen}
+          onOpenChange={setCreateDialogOpen}
+          onSubmit={handleCreate}
+          partners={[]}
+          loading={createMutation.isPending}
+        />
+
+        {/* Edit Experience Dialog */}
+        <CreateExperienceDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          onSubmit={handleUpdate}
+          partners={[]}
+          loading={updateMutation.isPending}
+          initialData={editingExperience}
+          mode="edit"
         />
       </div>
     </PartnerLayout>

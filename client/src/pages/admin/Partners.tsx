@@ -35,13 +35,27 @@ export default function AdminPartners() {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [deletingPartner, setDeletingPartner] = React.useState<HotelPartner | null>(null);
 
-  // Mock data for now - TODO: Replace with actual tRPC query
-  const data = {
-    data: [] as HotelPartner[],
-    total: 0,
-  };
-  const isLoading = false;
-  const error = null;
+  // Fetch partners
+  const { data, isLoading, error, refetch } = trpc.admin.partners.list.useQuery({
+    page: tableState.page,
+    pageSize: tableState.pageSize,
+    search: tableState.debouncedSearchValue,
+    sortColumn: tableState.sortConfig?.column,
+    sortDirection: tableState.sortConfig?.direction,
+  });
+
+  // Delete mutation
+  const deleteMutation = trpc.admin.partners.delete.useMutation({
+    onSuccess: () => {
+      toast.success('Partenaire supprimé avec succès');
+      setDeleteDialogOpen(false);
+      setDeletingPartner(null);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
 
   const handleView = (partner: HotelPartner) => {
     setSelectedPartner(partner);
@@ -60,10 +74,7 @@ export default function AdminPartners() {
 
   const confirmDelete = async () => {
     if (!deletingPartner) return;
-    // TODO: Implement actual delete
-    toast.success('Partenaire supprimé avec succès');
-    setDeleteDialogOpen(false);
-    setDeletingPartner(null);
+    await deleteMutation.mutateAsync({ id: deletingPartner.id });
   };
 
   // Prepare view details sections
@@ -138,12 +149,12 @@ export default function AdminPartners() {
         {/* DataTable */}
         <DataTable
           columns={partnersColumns}
-          data={data.data}
+          data={data?.data || []}
           loading={isLoading}
           error={error?.message}
           page={tableState.page}
           pageSize={tableState.pageSize}
-          total={data.total}
+          total={data?.total || 0}
           onPageChange={tableState.setPage}
           onPageSizeChange={tableState.setPageSize}
           searchValue={tableState.searchValue}
@@ -179,7 +190,7 @@ export default function AdminPartners() {
           onConfirm={confirmDelete}
           title="Supprimer ce partenaire ?"
           itemName={deletingPartner?.hotelName}
-          loading={false}
+          loading={deleteMutation.isPending}
         />
       </div>
     </AdminLayout>

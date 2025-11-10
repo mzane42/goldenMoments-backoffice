@@ -35,13 +35,27 @@ export default function AdminUsers() {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [deletingUser, setDeletingUser] = React.useState<User | null>(null);
 
-  // Mock data for now - TODO: Replace with actual tRPC query
-  const data = {
-    data: [] as User[],
-    total: 0,
-  };
-  const isLoading = false;
-  const error = null;
+  // Fetch users
+  const { data, isLoading, error, refetch } = trpc.admin.users.list.useQuery({
+    page: tableState.page,
+    pageSize: tableState.pageSize,
+    search: tableState.debouncedSearchValue,
+    sortColumn: tableState.sortConfig?.column,
+    sortDirection: tableState.sortConfig?.direction,
+  });
+
+  // Delete mutation
+  const deleteMutation = trpc.admin.users.delete.useMutation({
+    onSuccess: () => {
+      toast.success('Utilisateur supprimé avec succès');
+      setDeleteDialogOpen(false);
+      setDeletingUser(null);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
 
   const handleView = (user: User) => {
     setSelectedUser(user);
@@ -60,10 +74,7 @@ export default function AdminUsers() {
 
   const confirmDelete = async () => {
     if (!deletingUser) return;
-    // TODO: Implement actual delete
-    toast.success('Utilisateur supprimé avec succès');
-    setDeleteDialogOpen(false);
-    setDeletingUser(null);
+    await deleteMutation.mutateAsync({ id: deletingUser.id });
   };
 
   // Prepare view details sections
@@ -134,12 +145,12 @@ export default function AdminUsers() {
         {/* DataTable */}
         <DataTable
           columns={usersColumns}
-          data={data.data}
+          data={data?.data || []}
           loading={isLoading}
           error={error?.message}
           page={tableState.page}
           pageSize={tableState.pageSize}
-          total={data.total}
+          total={data?.total || 0}
           onPageChange={tableState.setPage}
           onPageSizeChange={tableState.setPageSize}
           searchValue={tableState.searchValue}
@@ -175,7 +186,7 @@ export default function AdminUsers() {
           onConfirm={confirmDelete}
           title="Supprimer cet utilisateur ?"
           itemName={deletingUser?.fullName || deletingUser?.email}
-          loading={false}
+          loading={deleteMutation.isPending}
         />
       </div>
     </AdminLayout>

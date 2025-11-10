@@ -1,0 +1,88 @@
+/**
+ * Validation schemas for Experience entity
+ */
+
+import { z } from 'zod';
+
+// Location schema
+export const locationSchema = z.object({
+  area: z.string().optional(),
+  city: z.string().min(1, 'La ville est requise'),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+});
+
+// Items/Amenities schema
+export const itemsSchema = z.object({
+  amenities: z.array(z.string()).default([]),
+});
+
+// Check-in info schema
+export const checkInInfoSchema = z.object({
+  check_in: z.string().optional(),
+  check_out: z.string().optional(),
+});
+
+// Transportation schema
+export const transportationSchema = z.object({
+  parking: z.string().optional(),
+  nearest_airport: z.object({
+    name: z.string().optional(),
+    distance: z.string().optional(),
+  }).optional(),
+});
+
+// Accessibility schema
+export const accessibilitySchema = z.object({
+  elevator: z.boolean().default(false),
+  accessible_rooms: z.boolean().default(false),
+  wheelchair_accessible: z.boolean().default(false),
+});
+
+// Additional info schema
+export const additionalInfoSchema = z.object({
+  pets_allowed: z.boolean().default(false),
+  smoking_policy: z.string().optional(),
+  languages_spoken: z.array(z.string()).default([]),
+});
+
+// Schedules schema
+export const schedulesSchema = z.object({
+  pool: z.string().optional(),
+  breakfast: z.string().optional(),
+  dinner: z.string().optional(),
+  fitness_center: z.string().optional(),
+});
+
+// Main experience creation schema
+export const createExperienceSchema = z.object({
+  title: z.string().min(3, 'Le titre doit contenir au moins 3 caractères'),
+  description: z.string().min(10, 'La description doit contenir au moins 10 caractères'),
+  long_description: z.string().optional(),
+  price: z.number().min(0, 'Le prix doit être positif'),
+  images: z.array(z.string().url('URL d\'image invalide')).min(1, 'Au moins une image est requise'),
+  image_url: z.string().url('URL d\'image invalide').optional(),
+  category: z.string().min(1, 'La catégorie est requise'),
+  location: locationSchema,
+  items: itemsSchema.optional(),
+  check_in_info: checkInInfoSchema.optional(),
+  transportation: transportationSchema.optional(),
+  accessibility: accessibilitySchema.optional(),
+  additional_info: additionalInfoSchema.optional(),
+  schedules: schedulesSchema.optional(),
+  date_start: z.string().optional(),
+  date_end: z.string().optional(),
+  company: z.string().optional(),
+  status: z.enum(['active', 'inactive']).default('active'),
+  partner_id: z.string().uuid().optional().nullable(),
+});
+
+// Update experience schema (all fields optional except id)
+export const updateExperienceSchema = createExperienceSchema.partial().extend({
+  id: z.string().uuid(),
+});
+
+// Type inference
+export type CreateExperienceInput = z.infer<typeof createExperienceSchema>;
+export type UpdateExperienceInput = z.infer<typeof updateExperienceSchema>;
+

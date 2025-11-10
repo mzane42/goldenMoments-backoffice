@@ -32,21 +32,14 @@ export default function PartnerReservations() {
   const [viewDialogOpen, setViewDialogOpen] = React.useState(false);
   const [selectedReservation, setSelectedReservation] = React.useState<ReservationWithRelations | null>(null);
 
-  // Mock data for now - TODO: Replace with actual tRPC query filtered by partner
-  // const { data, isLoading, error } = trpc.partner.reservations.list.useQuery({
-  //   page: tableState.page,
-  //   pageSize: tableState.pageSize,
-  //   search: tableState.debouncedSearchValue,
-  //   sortColumn: tableState.sortConfig?.column,
-  //   sortDirection: tableState.sortConfig?.direction,
-  // });
-
-  const data = {
-    data: [] as ReservationWithRelations[],
-    total: 0,
-  };
-  const isLoading = false;
-  const error = null;
+  // Fetch partner's reservations
+  const { data, isLoading, error } = trpc.partner.reservations.list.useQuery({
+    page: tableState.page,
+    pageSize: tableState.pageSize,
+    search: tableState.debouncedSearchValue,
+    sortColumn: tableState.sortConfig?.column,
+    sortDirection: tableState.sortConfig?.direction,
+  });
 
   const handleView = (reservation: ReservationWithRelations) => {
     setSelectedReservation(reservation);
@@ -115,12 +108,12 @@ export default function PartnerReservations() {
         {/* DataTable */}
         <DataTable
           columns={reservationsColumns}
-          data={data.data}
+          data={data?.data || []}
           loading={isLoading}
           error={error?.message}
           page={tableState.page}
           pageSize={tableState.pageSize}
-          total={data.total}
+          total={data?.total || 0}
           onPageChange={tableState.setPage}
           onPageSizeChange={tableState.setPageSize}
           searchValue={tableState.searchValue}

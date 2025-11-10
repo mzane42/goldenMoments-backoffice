@@ -100,33 +100,54 @@ Similar functionality to admin pages but:
 - ✅ All partner routes connected: `/partner/reservations`, `/partner/experiences`
 - ✅ Navigation links already exist in layouts
 
-## 🔄 Ready for Backend Integration
+## ✅ Backend Integration Complete
 
-All pages use mock data with TODO comments marking where tRPC queries should be integrated:
+All pages are now fully integrated with tRPC backend:
 
-```typescript
-// TODO: Replace with actual tRPC query
-// const { data, isLoading, error } = trpc.admin.reservations.list.useQuery({
-//   page: tableState.page,
-//   pageSize: tableState.pageSize,
-//   search: tableState.debouncedSearchValue,
-//   sortColumn: tableState.sortConfig?.column,
-//   sortDirection: tableState.sortConfig?.direction,
-// });
-```
+### Backend Changes
+**Location:** `server/db.ts`, `server/supabaseRouters.ts`
 
-Expected tRPC endpoints:
-- `trpc.admin.reservations.list`
-- `trpc.admin.reservations.delete`
-- `trpc.admin.experiences.list`
-- `trpc.admin.experiences.delete`
-- `trpc.admin.users.list`
-- `trpc.admin.users.delete`
-- `trpc.admin.partners.list`
-- `trpc.admin.partners.delete`
-- `trpc.partner.reservations.list` (filtered by partner)
-- `trpc.partner.experiences.list` (filtered by partner)
-- `trpc.partner.experiences.delete`
+1. **Database Layer (`server/db.ts`)**
+   - ✅ Added `PaginationParams` and `PaginatedResult` types
+   - ✅ Created paginated query functions for all entities:
+     - `getUsersPaginated()` - with search on email, phone, fullName
+     - `getHotelPartnersPaginated()` - with search on hotelName, contactName, email, company
+     - `getExperiencesPaginated()` - with search on title, description, category, company
+     - `getReservationsPaginated()` - with search on bookingReference, roomType
+     - `getExperiencesByCompanyPaginated()` - filtered by partner company
+     - `getReservationsByCompanyPaginated()` - filtered by partner company
+   - ✅ Added delete functions: `deleteUser()`, `deleteHotelPartner()`, `deleteReservation()`
+   - ✅ All functions support sorting, pagination, and full-text search
+
+2. **tRPC Routers (`server/supabaseRouters.ts`)**
+   - ✅ Updated all `.list` queries to accept pagination parameters
+   - ✅ Added delete mutations for all entities:
+     - `admin.reservations.delete`
+     - `admin.experiences.delete`
+     - `admin.users.delete`
+     - `admin.partners.delete`
+     - `partner.experiences.delete`
+   - ✅ All partner routes automatically filter by partner's company
+
+3. **Frontend Integration**
+   - ✅ All 6 CRUD pages updated to use real tRPC queries
+   - ✅ Loading states connected
+   - ✅ Error handling connected
+   - ✅ Delete operations fully functional
+   - ✅ Pagination, search, and sorting working end-to-end
+
+### Active tRPC Endpoints
+- ✅ `trpc.admin.reservations.list` - paginated, searchable, sortable
+- ✅ `trpc.admin.reservations.delete` - with success/error handling
+- ✅ `trpc.admin.experiences.list` - paginated, searchable, sortable
+- ✅ `trpc.admin.experiences.delete` - with success/error handling
+- ✅ `trpc.admin.users.list` - paginated, searchable, sortable
+- ✅ `trpc.admin.users.delete` - with success/error handling
+- ✅ `trpc.admin.partners.list` - paginated, searchable, sortable
+- ✅ `trpc.admin.partners.delete` - with success/error handling
+- ✅ `trpc.partner.reservations.list` - filtered by partner, paginated
+- ✅ `trpc.partner.experiences.list` - filtered by partner, paginated
+- ✅ `trpc.partner.experiences.delete` - with ownership validation
 
 ## 📋 Phase 2 Features (Marked with TODO comments in code)
 
@@ -181,25 +202,76 @@ Expected tRPC endpoints:
 
 ## 🧪 Testing & Validation
 
-To test the implementation:
+### Backend Testing
+To test the backend integration:
+
+1. **Database Functions** (`server/db.ts`)
+   ```bash
+   # Test pagination
+   # - Visit any page and change page size (10, 20, 50, 100)
+   # - Navigate through pages
+   # - Verify correct number of items displayed
+   
+   # Test search
+   # - Type in search box (debounced 300ms)
+   # - Verify results match search query
+   # - Test with partial matches
+   
+   # Test sorting
+   # - Click column headers to sort
+   # - Verify ascending/descending order
+   # - Test with different columns
+   ```
+
+2. **tRPC Endpoints** (`server/supabaseRouters.ts`)
+   ```bash
+   # Test list queries
+   # - Verify data loads on page mount
+   # - Check loading skeletons appear
+   # - Verify error states display properly
+   
+   # Test delete mutations
+   # - Delete an item (confirmation dialog appears)
+   # - Verify success toast appears
+   # - Verify item removed from list
+   # - Check refetch happens automatically
+   ```
+
+3. **Partner Route Filtering**
+   ```bash
+   # Login as partner user
+   # - Navigate to /partner/experiences
+   # - Verify only partner's experiences shown
+   # - Navigate to /partner/reservations
+   # - Verify only partner's reservations shown
+   # - Try to delete someone else's experience (should fail with error)
+   ```
+
+### Frontend Testing
+To test the UI implementation:
 
 1. **Navigate to pages:**
    - Admin: `/admin/reservations`, `/admin/experiences`, `/admin/users`, `/admin/partners`
    - Partner: `/partner/reservations`, `/partner/experiences`
 
 2. **Test features:**
-   - Search functionality (debounced)
-   - Sorting (click column headers)
-   - Pagination (page size, navigation)
-   - Row actions (view, edit, delete)
-   - Empty states (should show when no data)
-   - Loading states (should show skeletons)
+   - ✅ Search functionality (debounced 300ms)
+   - ✅ Sorting (click column headers)
+   - ✅ Pagination (page size: 10, 20, 50, 100)
+   - ✅ Row actions (view, edit, delete)
+   - ✅ Empty states (show when no data)
+   - ✅ Loading states (show skeletons)
+   - ✅ Error states (display error messages)
+   - ✅ Delete confirmations (with loading state)
+   - ✅ Toast notifications (success/error)
 
-3. **Check for:**
-   - No linter errors ✅
-   - All imports resolve ✅
-   - TypeScript types are correct ✅
-   - UI is consistent with existing dashboard ✅
+3. **Validation checklist:**
+   - ✅ No linter errors
+   - ✅ All imports resolve
+   - ✅ TypeScript types are correct
+   - ✅ UI is consistent with existing dashboard
+   - ✅ No console errors
+   - ✅ Data persists after operations
 
 ## 📁 File Structure
 
@@ -241,22 +313,53 @@ shared/
 
 ## 🚀 Next Steps
 
-1. **Backend Integration (Priority 1)**
-   - Create tRPC routers for all entities
-   - Implement list queries with pagination, search, sort
-   - Implement delete mutations
-   - Connect frontend to backend (uncomment TODO sections)
+### ✅ Phase 1 Complete
+- ✅ Backend integration fully complete
+- ✅ All CRUD operations working
+- ✅ Pagination, search, and sorting implemented
+- ✅ All 6 pages connected to live data
 
-2. **Phase 2 Features (Priority 2)**
-   - Start with Excel export (high user value)
-   - Then advanced filters
-   - Then batch operations
-   - Then edit forms
+### 📋 Phase 2 Features (Priority Order)
 
-3. **Polish (Priority 3)**
-   - Mobile responsive card view
-   - Advanced animations
-   - Keyboard shortcuts
+1. **Excel Export (High Priority)**
+   - Create `client/src/lib/export.ts` with export utilities
+   - Add export button to DataTableToolbar
+   - Support exporting filtered/searched data
+   - Generate proper Excel format with library like `xlsx`
+
+2. **Advanced Filters (High Priority)**
+   - Status filters (multi-select dropdowns)
+   - Date range filters for reservations/experiences
+   - Category filters for experiences
+   - Filter persistence in URL params
+   - Clear all filters button
+
+3. **Batch Operations (High Priority)**
+   - Add row selection with checkboxes
+   - Bulk action toolbar (appears when rows selected)
+   - Bulk delete with confirmation
+   - Bulk status change
+   - "Select all" functionality
+
+4. **Edit Forms (High Priority)**
+   - Create `EditFormDialog.tsx` component
+   - Form validation with react-hook-form + zod
+   - Proper validation schemas for each entity
+   - Integration with tRPC update mutations
+   - Optimistic updates for better UX
+
+5. **Mobile Responsive (Medium Priority)**
+   - Card view for mobile devices (<768px)
+   - Swipe actions on mobile
+   - Adaptive filters (drawer on mobile)
+   - Touch-friendly interactions
+
+6. **Advanced UX (Medium Priority)**
+   - Keyboard shortcuts (cmd+k for search, etc.)
+   - Optimistic updates across all operations
+   - Advanced animations and transitions
+   - Better error boundaries with retry logic
+   - Column visibility toggles
 
 ## 💡 Extension Points
 

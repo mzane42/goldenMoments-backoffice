@@ -1,6 +1,26 @@
 import { supabaseAdmin } from './supabase';
 
 // =====================================================
+// TYPES
+// =====================================================
+
+export interface PaginationParams {
+  page: number;
+  pageSize: number;
+  search?: string;
+  sortColumn?: string;
+  sortDirection?: 'asc' | 'desc';
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+// =====================================================
 // USERS
 // =====================================================
 
@@ -33,6 +53,42 @@ export async function getAllUsers() {
   return data || [];
 }
 
+export async function getUsersPaginated(params: PaginationParams): Promise<PaginatedResult<any>> {
+  const { page, pageSize, search, sortColumn = 'created_at', sortDirection = 'desc' } = params;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabaseAdmin
+    .from('users')
+    .select('*', { count: 'exact' });
+
+  // Apply search filter
+  if (search && search.trim()) {
+    query = query.or(`email.ilike.%${search}%,phone_number.ilike.%${search}%,full_name.ilike.%${search}%`);
+  }
+
+  // Apply sorting
+  query = query.order(sortColumn, { ascending: sortDirection === 'asc' });
+
+  // Apply pagination
+  query = query.range(from, to);
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    console.error('[Database] Error getting users paginated:', error);
+    return { data: [], total: 0, page, pageSize, totalPages: 0 };
+  }
+
+  return {
+    data: data || [],
+    total: count || 0,
+    page,
+    pageSize,
+    totalPages: Math.ceil((count || 0) / pageSize),
+  };
+}
+
 export async function searchUsers(query: string) {
   const { data, error } = await supabaseAdmin
     .from('users')
@@ -48,7 +104,7 @@ export async function searchUsers(query: string) {
   return data || [];
 }
 
-export async function deleteUser(userId: number) {
+export async function deleteUser(userId: string) {
   const { error } = await supabaseAdmin
     .from('users')
     .delete()
@@ -158,6 +214,42 @@ export async function getAllHotelPartners() {
   return data || [];
 }
 
+export async function getHotelPartnersPaginated(params: PaginationParams): Promise<PaginatedResult<any>> {
+  const { page, pageSize, search, sortColumn = 'created_at', sortDirection = 'desc' } = params;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabaseAdmin
+    .from('hotel_partners')
+    .select('*', { count: 'exact' });
+
+  // Apply search filter
+  if (search && search.trim()) {
+    query = query.or(`hotel_name.ilike.%${search}%,contact_name.ilike.%${search}%,email.ilike.%${search}%,company.ilike.%${search}%`);
+  }
+
+  // Apply sorting
+  query = query.order(sortColumn, { ascending: sortDirection === 'asc' });
+
+  // Apply pagination
+  query = query.range(from, to);
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    console.error('[Database] Error getting hotel partners paginated:', error);
+    return { data: [], total: 0, page, pageSize, totalPages: 0 };
+  }
+
+  return {
+    data: data || [],
+    total: count || 0,
+    page,
+    pageSize,
+    totalPages: Math.ceil((count || 0) / pageSize),
+  };
+}
+
 export async function updateHotelPartner(id: number, updates: any) {
   const { error } = await supabaseAdmin
     .from('hotel_partners')
@@ -166,6 +258,18 @@ export async function updateHotelPartner(id: number, updates: any) {
 
   if (error) {
     console.error('[Database] Error updating hotel partner:', error);
+    throw error;
+  }
+}
+
+export async function deleteHotelPartner(id: string) {
+  const { error } = await supabaseAdmin
+    .from('hotel_partners')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[Database] Error deleting hotel partner:', error);
     throw error;
   }
 }
@@ -188,6 +292,42 @@ export async function getAllExperiences() {
   return data || [];
 }
 
+export async function getExperiencesPaginated(params: PaginationParams): Promise<PaginatedResult<any>> {
+  const { page, pageSize, search, sortColumn = 'created_at', sortDirection = 'desc' } = params;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabaseAdmin
+    .from('experiences')
+    .select('*', { count: 'exact' });
+
+  // Apply search filter
+  if (search && search.trim()) {
+    query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,category.ilike.%${search}%,company.ilike.%${search}%`);
+  }
+
+  // Apply sorting
+  query = query.order(sortColumn, { ascending: sortDirection === 'asc' });
+
+  // Apply pagination
+  query = query.range(from, to);
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    console.error('[Database] Error getting experiences paginated:', error);
+    return { data: [], total: 0, page, pageSize, totalPages: 0 };
+  }
+
+  return {
+    data: data || [],
+    total: count || 0,
+    page,
+    pageSize,
+    totalPages: Math.ceil((count || 0) / pageSize),
+  };
+}
+
 export async function getExperiencesByCompany(company: string) {
   const { data, error } = await supabaseAdmin
     .from('experiences')
@@ -201,6 +341,46 @@ export async function getExperiencesByCompany(company: string) {
   }
 
   return data || [];
+}
+
+export async function getExperiencesByCompanyPaginated(
+  company: string,
+  params: PaginationParams
+): Promise<PaginatedResult<any>> {
+  const { page, pageSize, search, sortColumn = 'created_at', sortDirection = 'desc' } = params;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabaseAdmin
+    .from('experiences')
+    .select('*', { count: 'exact' })
+    .eq('company', company);
+
+  // Apply search filter
+  if (search && search.trim()) {
+    query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%,category.ilike.%${search}%`);
+  }
+
+  // Apply sorting
+  query = query.order(sortColumn, { ascending: sortDirection === 'asc' });
+
+  // Apply pagination
+  query = query.range(from, to);
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    console.error('[Database] Error getting experiences by company paginated:', error);
+    return { data: [], total: 0, page, pageSize, totalPages: 0 };
+  }
+
+  return {
+    data: data || [],
+    total: count || 0,
+    page,
+    pageSize,
+    totalPages: Math.ceil((count || 0) / pageSize),
+  };
 }
 
 export async function getExperienceById(id: number) {
@@ -290,11 +470,47 @@ export async function getAllReservations() {
     return [];
   }
 
-  return data?.map(r => ({
-    reservation: r,
-    experience: r.experience,
-    user: r.user
-  })) || [];
+  return data || [];
+}
+
+export async function getReservationsPaginated(params: PaginationParams): Promise<PaginatedResult<any>> {
+  const { page, pageSize, search, sortColumn = 'created_at', sortDirection = 'desc' } = params;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabaseAdmin
+    .from('reservations')
+    .select(`
+      *,
+      experience:experiences(*),
+      user:users(*)
+    `, { count: 'exact' });
+
+  // Apply search filter
+  if (search && search.trim()) {
+    query = query.or(`booking_reference.ilike.%${search}%,room_type.ilike.%${search}%`);
+  }
+
+  // Apply sorting
+  query = query.order(sortColumn, { ascending: sortDirection === 'asc' });
+
+  // Apply pagination
+  query = query.range(from, to);
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    console.error('[Database] Error getting reservations paginated:', error);
+    return { data: [], total: 0, page, pageSize, totalPages: 0 };
+  }
+
+  return {
+    data: data || [],
+    total: count || 0,
+    page,
+    pageSize,
+    totalPages: Math.ceil((count || 0) / pageSize),
+  };
 }
 
 export async function getReservationsByCompany(company: string) {
@@ -313,11 +529,51 @@ export async function getReservationsByCompany(company: string) {
     return [];
   }
 
-  return data?.map(r => ({
-    reservation: r,
-    experience: r.experience,
-    user: r.user
-  })) || [];
+  return data || [];
+}
+
+export async function getReservationsByCompanyPaginated(
+  company: string,
+  params: PaginationParams
+): Promise<PaginatedResult<any>> {
+  const { page, pageSize, search, sortColumn = 'created_at', sortDirection = 'desc' } = params;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabaseAdmin
+    .from('reservations')
+    .select(`
+      *,
+      experience:experiences!inner(*),
+      user:users(*)
+    `, { count: 'exact' })
+    .eq('experience.company', company);
+
+  // Apply search filter
+  if (search && search.trim()) {
+    query = query.or(`booking_reference.ilike.%${search}%,room_type.ilike.%${search}%`);
+  }
+
+  // Apply sorting
+  query = query.order(sortColumn, { ascending: sortDirection === 'asc' });
+
+  // Apply pagination
+  query = query.range(from, to);
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    console.error('[Database] Error getting reservations by company paginated:', error);
+    return { data: [], total: 0, page, pageSize, totalPages: 0 };
+  }
+
+  return {
+    data: data || [],
+    total: count || 0,
+    page,
+    pageSize,
+    totalPages: Math.ceil((count || 0) / pageSize),
+  };
 }
 
 export async function getReservationById(id: number) {
@@ -393,7 +649,7 @@ export async function updateReservation(id: number, updates: any) {
   }
 }
 
-export async function cancelReservation(id: number, reason: string, cancelledBy: number) {
+export async function cancelReservation(id: number, reason: string, cancelledBy: string) {
   const { error } = await supabaseAdmin
     .from('reservations')
     .update({
@@ -406,6 +662,18 @@ export async function cancelReservation(id: number, reason: string, cancelledBy:
 
   if (error) {
     console.error('[Database] Error cancelling reservation:', error);
+    throw error;
+  }
+}
+
+export async function deleteReservation(id: string) {
+  const { error } = await supabaseAdmin
+    .from('reservations')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    console.error('[Database] Error deleting reservation:', error);
     throw error;
   }
 }

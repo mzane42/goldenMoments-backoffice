@@ -8,5 +8,5 @@ export const getLoginUrl = () => {
   return "/login";
 };
 
-export const APP_TITLE = import.meta.env.VITE_APP_TITLE || "Golden Moments Backoffice";
-export const APP_LOGO = "https://placehold.co/128x128/E1E7EF/1F2937?text=GM";
+export const APP_TITLE = import.meta.env.VITE_APP_TITLE || "Golden Moments";
+export const APP_LOGO = "https://zwnsbeyeikhuvkiqccep.supabase.co/storage/v1/object/public/assets/logo/logo-solo.png";

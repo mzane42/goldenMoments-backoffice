@@ -112,7 +112,7 @@ export default function Login() {
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {useMagicLink ? "Envoyer le lien magique" : "Se connecter"}
+              Se connecter
             </Button>
           </form>
 
@@ -123,14 +123,12 @@ export default function Login() {
               className="text-sm text-blue-600 hover:underline"
               disabled={loading}
             >
-              {useMagicLink
-                ? "Se connecter avec un mot de passe"
-                : "Se connecter avec un lien magique"}
+              Se connecter avec un mot de passe
             </button>
           </div>
 
           <p className="mt-6 text-xs text-center text-gray-500">
-            © 2024 Golden Moments. Tous droits réservés.
+            © 2025 Golden Moments. Tous droits réservés.
           </p>
         </CardContent>
       </Card>

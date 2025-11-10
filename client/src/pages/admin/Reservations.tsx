@@ -36,34 +36,27 @@ export default function AdminReservations() {
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false);
   const [deletingReservation, setDeletingReservation] = React.useState<ReservationWithRelations | null>(null);
 
-  // Fetch reservations - TODO: Replace with actual tRPC query
-  // const { data, isLoading, error } = trpc.admin.reservations.list.useQuery({
-  //   page: tableState.page,
-  //   pageSize: tableState.pageSize,
-  //   search: tableState.debouncedSearchValue,
-  //   sortColumn: tableState.sortConfig?.column,
-  //   sortDirection: tableState.sortConfig?.direction,
-  // });
+  // Fetch reservations
+  const { data, isLoading, error, refetch } = trpc.admin.reservations.list.useQuery({
+    page: tableState.page,
+    pageSize: tableState.pageSize,
+    search: tableState.debouncedSearchValue,
+    sortColumn: tableState.sortConfig?.column,
+    sortDirection: tableState.sortConfig?.direction,
+  });
 
-  // Mock data for now
-  const data = {
-    data: [] as ReservationWithRelations[],
-    total: 0,
-  };
-  const isLoading = false;
-  const error = null;
-
-  // Delete mutation - TODO: Replace with actual tRPC mutation
-  // const deleteMutation = trpc.admin.reservations.delete.useMutation({
-  //   onSuccess: () => {
-  //     toast.success('Réservation supprimée avec succès');
-  //     setDeleteDialogOpen(false);
-  //     setDeletingReservation(null);
-  //   },
-  //   onError: (error) => {
-  //     toast.error(`Erreur: ${error.message}`);
-  //   },
-  // });
+  // Delete mutation
+  const deleteMutation = trpc.admin.reservations.delete.useMutation({
+    onSuccess: () => {
+      toast.success('Réservation supprimée avec succès');
+      setDeleteDialogOpen(false);
+      setDeletingReservation(null);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
 
   const handleView = (reservation: ReservationWithRelations) => {
     setSelectedReservation(reservation);
@@ -82,11 +75,7 @@ export default function AdminReservations() {
 
   const confirmDelete = async () => {
     if (!deletingReservation) return;
-    // TODO: Implement actual delete
-    // await deleteMutation.mutateAsync({ id: deletingReservation.id });
-    toast.success('Réservation supprimée avec succès');
-    setDeleteDialogOpen(false);
-    setDeletingReservation(null);
+    await deleteMutation.mutateAsync({ id: deletingReservation.id });
   };
 
   // Prepare view details sections
@@ -150,12 +139,12 @@ export default function AdminReservations() {
         {/* DataTable */}
         <DataTable
           columns={reservationsColumns}
-          data={data.data}
+          data={data?.data || []}
           loading={isLoading}
           error={error?.message}
           page={tableState.page}
           pageSize={tableState.pageSize}
-          total={data.total}
+          total={data?.total || 0}
           onPageChange={tableState.setPage}
           onPageSizeChange={tableState.setPageSize}
           searchValue={tableState.searchValue}
@@ -191,7 +180,7 @@ export default function AdminReservations() {
           onConfirm={confirmDelete}
           title="Supprimer cette réservation ?"
           itemName={deletingReservation?.bookingReference}
-          loading={false}
+          loading={deleteMutation.isPending}
         />
       </div>
     </AdminLayout>

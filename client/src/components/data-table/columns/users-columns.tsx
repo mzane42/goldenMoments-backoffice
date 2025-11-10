@@ -69,7 +69,7 @@ export const usersColumns: DataTableColumn<User>[] = [
     accessorKey: 'authId',
     cell: (row) => (
       <span className="font-mono text-xs text-muted-foreground">
-        {row.authId.substring(0, 8)}...
+        {row.authId ? `${row.authId.substring(0, 8)}...` : '-'}
       </span>
     ),
   },
