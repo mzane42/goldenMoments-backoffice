@@ -5,7 +5,7 @@ import { useSupabaseAuth } from '@/contexts/SupabaseAuthContext';
  * mais utilisant Supabase en arrière-plan
  */
 export function useAuth() {
-  const { user, session, loading, signOut } = useSupabaseAuth();
+  const { user, session, loading, signOut, signInWithOAuth } = useSupabaseAuth();
 
   return {
     user: user ? {
@@ -18,5 +18,6 @@ export function useAuth() {
     isAuthenticated: !!user,
     error: null,
     logout: signOut,
+    signInWithGoogle: () => signInWithOAuth('google'),
   };
 }
