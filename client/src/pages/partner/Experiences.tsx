@@ -15,11 +15,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useTableState } from '@/hooks/useTableState';
 import { trpc } from '@/lib/trpc';
-import { Plus, ShoppingBag, Star, Calendar as CalendarIcon } from 'lucide-react';
+import { Plus, ShoppingBag, Star, Calendar as CalendarIcon, Bed } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ExperienceWithRelations } from '@/../../shared/types/entities';
 import type { CreateExperienceInput } from '@/../../shared/schemas/experience';
 import { CalendarManagementDialog } from '@/components/calendar/CalendarManagementDialog';
+import { ManageRoomTypesDialog } from '@/components/dialogs/ManageRoomTypesDialog';
 import {
   formatCurrency,
   formatDate,
@@ -48,6 +49,10 @@ export default function PartnerExperiences() {
   // Calendar dialog state
   const [calendarDialogOpen, setCalendarDialogOpen] = React.useState(false);
   const [calendarExperience, setCalendarExperience] = React.useState<ExperienceWithRelations | null>(null);
+
+  // Room types dialog state
+  const [roomTypesDialogOpen, setRoomTypesDialogOpen] = React.useState(false);
+  const [roomTypesExperience, setRoomTypesExperience] = React.useState<ExperienceWithRelations | null>(null);
 
   // Fetch partner's experiences
   const { data, isLoading, error, refetch } = trpc.partner.experiences.list.useQuery({
@@ -121,6 +126,11 @@ export default function PartnerExperiences() {
   const handleManageCalendar = (experience: ExperienceWithRelations) => {
     setCalendarExperience(experience);
     setCalendarDialogOpen(true);
+  };
+
+  const handleManageRoomTypes = (experience: ExperienceWithRelations) => {
+    setRoomTypesExperience(experience);
+    setRoomTypesDialogOpen(true);
   };
 
   const confirmDelete = async () => {
@@ -239,6 +249,11 @@ export default function PartnerExperiences() {
               onDelete={() => handleDelete(row)}
               additionalActions={[
                 {
+                  label: 'Gérer les types de chambres',
+                  icon: <Bed className="h-4 w-4" />,
+                  onClick: () => handleManageRoomTypes(row),
+                },
+                {
                   label: 'Gérer le calendrier',
                   icon: <CalendarIcon className="h-4 w-4" />,
                   onClick: () => handleManageCalendar(row),
@@ -302,8 +317,101 @@ export default function PartnerExperiences() {
             isAdmin={false}
           />
         )}
+
+        {/* Room Types Management Dialog */}
+        {roomTypesExperience && (
+          <RoomTypesManagement
+            experienceId={roomTypesExperience.id}
+            experienceName={roomTypesExperience.title}
+            open={roomTypesDialogOpen}
+            onOpenChange={setRoomTypesDialogOpen}
+          />
+        )}
       </div>
     </PartnerLayout>
+  );
+}
+
+// Room Types Management Component
+function RoomTypesManagement({
+  experienceId,
+  experienceName,
+  open,
+  onOpenChange,
+}: {
+  experienceId: string;
+  experienceName: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  // Fetch room types
+  const { data: roomTypes = [], refetch } = trpc.partner.roomTypes.list.useQuery(
+    { experienceId },
+    { enabled: open }
+  );
+
+  // Create mutation
+  const createMutation = trpc.partner.roomTypes.create.useMutation({
+    onSuccess: () => {
+      toast.success('Type de chambre créé avec succès');
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+
+  // Update mutation
+  const updateMutation = trpc.partner.roomTypes.update.useMutation({
+    onSuccess: () => {
+      toast.success('Type de chambre modifié avec succès');
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+
+  // Delete mutation
+  const deleteMutation = trpc.partner.roomTypes.delete.useMutation({
+    onSuccess: () => {
+      toast.success('Type de chambre supprimé avec succès');
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+
+  const handleCreate = async (data: any) => {
+    await createMutation.mutateAsync({
+      experience_id: experienceId,
+      ...data,
+    });
+  };
+
+  const handleUpdate = async (id: string, data: any) => {
+    await updateMutation.mutateAsync({
+      id,
+      updates: data,
+    });
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteMutation.mutateAsync({ id });
+  };
+
+  return (
+    <ManageRoomTypesDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      roomTypes={roomTypes}
+      experienceId={experienceId}
+      experienceName={experienceName}
+      onCreate={handleCreate}
+      onUpdate={handleUpdate}
+      onDelete={handleDelete}
+    />
   );
 }
 

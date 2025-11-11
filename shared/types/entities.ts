@@ -197,6 +197,8 @@ export interface RoomType {
   description: string | null;
   baseCapacity: number;
   maxCapacity: number;
+  size: number | null;
+  bedType: string | null;
   amenities: JSONB;
   images: string[];
   createdAt: Timestamp;

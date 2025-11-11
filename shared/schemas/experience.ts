@@ -54,6 +54,16 @@ export const schedulesSchema = z.object({
   fitness_center: z.string().optional(),
 });
 
+// Extra item schema (optional add-ons)
+export const extraItemSchema = z.object({
+  label: z.string().min(1, 'Le label est requis'),
+  emoji: z.string().min(1, 'L\'emoji est requis'),
+  price: z.number().min(0, 'Le prix doit être positif'),
+});
+
+// Extras schema
+export const extrasSchema = z.array(extraItemSchema).optional().default([]);
+
 // Main experience creation schema
 export const createExperienceSchema = z.object({
   title: z.string().min(3, 'Le titre doit contenir au moins 3 caractères'),
@@ -70,6 +80,7 @@ export const createExperienceSchema = z.object({
   accessibility: accessibilitySchema.optional(),
   additional_info: additionalInfoSchema.optional(),
   schedules: schedulesSchema.optional(),
+  extras: extrasSchema.optional(),
   date_start: z.string().optional(),
   date_end: z.string().optional(),
   company: z.string().optional(),
