@@ -276,7 +276,7 @@ export function CreateExperienceDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="flex flex-col h-full">
+        <form onSubmit={handleSubmit(handleFormSubmit as (data: CreateExperienceInput) => Promise<void>)} className="flex flex-col h-full">
           <ScrollArea className="flex-1 px-6">
             {isReadOnly && (
               <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
@@ -374,7 +374,6 @@ export function CreateExperienceDialog({
                           onChange={field.onChange}
                           placeholder="Écrivez une description détaillée de l'expérience. Utilisez la barre d'outils pour formater votre texte..."
                           rows={15}
-                          disabled={isReadOnly}
                         />
                       )}
                     />

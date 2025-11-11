@@ -5,8 +5,14 @@ import { BarChart3, Calendar, Euro, TrendingUp } from "lucide-react";
 
 export default function PartnerDashboard() {
   const { data: revenue, isLoading: revenueLoading } = trpc.partner.revenue.useQuery();
-  const { data: experiences, isLoading: experiencesLoading } = trpc.partner.experiences.list.useQuery();
-  const { data: reservations, isLoading: reservationsLoading } = trpc.partner.reservations.list.useQuery();
+  const { data: experiences, isLoading: experiencesLoading } = trpc.partner.experiences.list.useQuery({
+    page: 1,
+    pageSize: 100,
+  });
+  const { data: reservations, isLoading: reservationsLoading } = trpc.partner.reservations.list.useQuery({
+    page: 1,
+    pageSize: 100,
+  });
 
   const formatCurrency = (cents: number) => {
     return new Intl.NumberFormat("fr-FR", {
@@ -34,8 +40,8 @@ export default function PartnerDashboard() {
     );
   }
 
-  const activeExperiences = experiences?.filter((exp) => exp.isActive).length || 0;
-  const upcomingReservations = reservations?.filter(
+  const activeExperiences = experiences?.data?.filter((exp) => exp.isActive).length || 0;
+  const upcomingReservations = reservations?.data?.filter(
     (res) => res.reservation.status === "confirmed" && new Date(res.reservation.checkInDate) > new Date()
   ).length || 0;
 
@@ -64,7 +70,7 @@ export default function PartnerDashboard() {
       title: "Expériences actives",
       value: activeExperiences,
       icon: BarChart3,
-      description: `${experiences?.length || 0} au total`,
+      description: `${experiences?.data?.length || 0} au total`,
       color: "text-blue-600",
       bgColor: "bg-blue-100",
     },
@@ -72,7 +78,7 @@ export default function PartnerDashboard() {
       title: "Réservations à venir",
       value: upcomingReservations,
       icon: Calendar,
-      description: `${reservations?.length || 0} au total`,
+      description: `${reservations?.data?.length || 0} au total`,
       color: "text-purple-600",
       bgColor: "bg-purple-100",
     },
@@ -121,9 +127,9 @@ export default function PartnerDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {experiences && experiences.length > 0 ? (
+            {experiences?.data && experiences.data.length > 0 ? (
               <div className="space-y-4">
-                {experiences.slice(0, 5).map((exp) => (
+                {experiences.data.slice(0, 5).map((exp) => (
                   <div
                     key={exp.id}
                     className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-accent/50 transition-colors"
@@ -163,9 +169,9 @@ export default function PartnerDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {reservations && reservations.length > 0 ? (
+            {reservations?.data && reservations.data.length > 0 ? (
               <div className="space-y-4">
-                {reservations.slice(0, 5).map((item) => (
+                {reservations.data.slice(0, 5).map((item) => (
                   <div
                     key={item.reservation.id}
                     className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-accent/50 transition-colors"
