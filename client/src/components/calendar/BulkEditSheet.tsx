@@ -67,7 +67,7 @@ export function BulkEditSheet({
         isAvailable: true,
       });
     }
-  }, [initialData, selectedDatesCount]);
+  }, [initialData]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

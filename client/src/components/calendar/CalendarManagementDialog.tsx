@@ -149,8 +149,12 @@ export function CalendarManagementDialog({
   const updateRoomTypeMutation = isAdmin ? adminUpdateRoomTypeMutation : partnerUpdateRoomTypeMutation;
 
   const partnerDeleteRoomTypeMutation = trpc.partner.roomTypes.delete.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast.success('Type de chambre supprimé avec succès');
+      if (variables?.id === selectedRoomTypeId) {
+        setSelectedRoomTypeId(null);
+        setSelectedDates([]);
+      }
       refetchRoomTypes();
       setManageRoomTypesOpen(false);
     },
@@ -159,8 +163,12 @@ export function CalendarManagementDialog({
     },
   });
   const adminDeleteRoomTypeMutation = trpc.admin.roomTypes.delete.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast.success('Type de chambre supprimé avec succès');
+      if (variables?.id === selectedRoomTypeId) {
+        setSelectedRoomTypeId(null);
+        setSelectedDates([]);
+      }
       refetchRoomTypes();
       setManageRoomTypesOpen(false);
     },
@@ -254,7 +262,10 @@ export function CalendarManagementDialog({
     // Filter out null values and convert to expected format
     const cleanUpdates: any = {};
     if (updates.name !== undefined) cleanUpdates.name = updates.name;
-    if (updates.description !== undefined) cleanUpdates.description = updates.description || undefined;
+    if (updates.description !== undefined) {
+      cleanUpdates.description =
+      updates.description === '' ? null : updates.description;
+    }
     if (updates.baseCapacity !== undefined) cleanUpdates.base_capacity = updates.baseCapacity;
     if (updates.maxCapacity !== undefined) cleanUpdates.max_capacity = updates.maxCapacity;
     if (updates.amenities !== undefined) cleanUpdates.amenities = updates.amenities;
