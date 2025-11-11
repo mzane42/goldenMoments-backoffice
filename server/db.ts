@@ -829,6 +829,8 @@ export async function createRoomType(roomType: {
   description?: string;
   base_capacity?: number;
   max_capacity?: number;
+  size?: number;
+  bed_type?: string;
   amenities?: any;
   images?: string[];
 }) {
@@ -851,6 +853,8 @@ export async function updateRoomType(id: string, updates: Partial<{
   description: string;
   base_capacity: number;
   max_capacity: number;
+  size: number;
+  bed_type: string;
   amenities: any;
   images: string[];
 }>) {
@@ -870,6 +874,49 @@ export async function updateRoomType(id: string, updates: Partial<{
 }
 
 export async function deleteRoomType(id: string) {
+  // First, get the room type to retrieve its images
+  const { data: roomType, error: fetchError } = await supabaseAdmin
+    .from('room_types')
+    .select('images')
+    .eq('id', id)
+    .single();
+
+  if (fetchError) {
+    console.error('[Database] Error fetching room type:', fetchError);
+    throw new Error('Failed to fetch room type');
+  }
+
+  // Delete images from storage if they exist
+  if (roomType?.images && roomType.images.length > 0) {
+    try {
+      // Extract paths from image URLs
+      const imagePaths = roomType.images.map((url: string) => {
+        // URL format: https://{project}.supabase.co/storage/v1/object/public/{bucket}/{path}
+        const urlParts = url.split('/storage/v1/object/public/');
+        if (urlParts.length === 2) {
+          const [bucket, ...pathParts] = urlParts[1].split('/');
+          return pathParts.join('/');
+        }
+        return null;
+      }).filter((path: string | null): path is string => path !== null);
+
+      if (imagePaths.length > 0) {
+        const { error: storageError } = await supabaseAdmin.storage
+          .from('hotels')
+          .remove(imagePaths);
+
+        if (storageError) {
+          console.error('[Database] Error deleting room type images:', storageError);
+          // Continue with room type deletion even if image deletion fails
+        }
+      }
+    } catch (error) {
+      console.error('[Database] Exception while deleting room type images:', error);
+      // Continue with room type deletion even if image deletion fails
+    }
+  }
+
+  // Delete the room type record
   const { error } = await supabaseAdmin
     .from('room_types')
     .delete()

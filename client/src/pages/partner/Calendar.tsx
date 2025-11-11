@@ -314,6 +314,7 @@ export default function PartnerCalendar() {
           onOpenChange={setManageRoomTypesOpen}
           roomTypes={roomTypes}
           experienceId={selectedExperienceId || ''}
+          experienceName={experiences.find(exp => exp.id === selectedExperienceId)?.title || 'Experience'}
           onCreate={handleCreateRoomType}
           onUpdate={handleUpdateRoomType}
           onDelete={handleDeleteRoomType}

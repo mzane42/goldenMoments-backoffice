@@ -31,8 +31,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { X, Plus, Upload, MapPin, Info } from 'lucide-react';
+import { ImageUpload } from '@/components/ui/ImageUpload';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { X, Plus, Upload, MapPin, Info, Loader2 } from 'lucide-react';
 import { createExperienceSchema, type CreateExperienceInput } from '@/../../shared/schemas/experience';
+import { uploadImages, generateBucketPath } from '@/lib/supabaseUpload';
+import { toast } from 'sonner';
+import { trpc } from '@/lib/trpc';
 
 export interface CreateExperienceDialogProps {
   open: boolean;
@@ -112,6 +122,7 @@ export function CreateExperienceDialog({
         pool: '',
         fitness_center: '',
       },
+      extras: [],
       date_start: '',
       date_end: '',
       company: '',
@@ -123,10 +134,35 @@ export function CreateExperienceDialog({
   const images = watch('images') || [];
   const amenities = watch('items.amenities') || [];
   const languages = watch('additional_info.languages_spoken') || [];
+  const extras = watch('extras') || [];
   const longDescription = watch('long_description') || '';
+  const title = watch('title') || '';
 
   const [newImage, setNewImage] = React.useState('');
   const [newAmenity, setNewAmenity] = React.useState('');
+  const [newExtra, setNewExtra] = React.useState({ label: '', emoji: '', price: 0 });
+  const [imageFiles, setImageFiles] = React.useState<File[]>([]);
+  const [isUploadingImages, setIsUploadingImages] = React.useState(false);
+  const [roomTypeImages, setRoomTypeImages] = React.useState<Record<string, File[]>>({});
+  const [uploadingRoomTypeId, setUploadingRoomTypeId] = React.useState<string | null>(null);
+
+  // Fetch room types for this experience (only in edit mode)
+  const { data: roomTypes, refetch: refetchRoomTypes } = trpc.admin.roomTypes.list.useQuery(
+    { experienceId: initialData?.id || '' },
+    { enabled: Boolean(isEditMode && initialData?.id) }
+  );
+
+  // Mutation for updating room type images
+  const updateRoomTypeMutation = trpc.admin.roomTypes.update.useMutation({
+    onSuccess: () => {
+      refetchRoomTypes();
+      toast.success('Images du type de chambre mises à jour');
+    },
+    onError: (error) => {
+      toast.error('Erreur lors de la mise à jour des images');
+      console.error('Error updating room type:', error);
+    },
+  });
 
   const currentPartnerId = initialData?.partner_id ?? initialData?.partnerId;
 
@@ -191,6 +227,7 @@ export function CreateExperienceDialog({
         initialData.schedules ??
         initialData.schedules ??
         { breakfast: '', dinner: '', pool: '', fitness_center: '' },
+      extras: initialData.extras ?? [],
       date_start: initialData.date_start ?? initialData.dateStart ?? '',
       date_end: initialData.date_end ?? initialData.dateEnd ?? '',
       company: initialData.company ?? '',
@@ -239,22 +276,127 @@ export function CreateExperienceDialog({
     }
   };
 
+  const addExtra = () => {
+    if (newExtra.label.trim() && newExtra.emoji.trim() && newExtra.price >= 0) {
+      setValue('extras', [...extras, {
+        label: newExtra.label.trim(),
+        emoji: newExtra.emoji.trim(),
+        price: newExtra.price
+      }]);
+      setNewExtra({ label: '', emoji: '', price: 0 });
+    }
+  };
+
+  const removeExtra = (index: number) => {
+    setValue('extras', extras.filter((_, i) => i !== index));
+  };
+
+  const handleRoomTypeImageUpload = async (roomTypeId: string, roomTypeName: string) => {
+    const files = roomTypeImages[roomTypeId];
+    if (!files || files.length === 0) {
+      toast.info('Aucune image à télécharger');
+      return;
+    }
+
+    try {
+      setUploadingRoomTypeId(roomTypeId);
+      toast.info('Téléchargement des images...');
+
+      // Generate bucket path for room type images
+      const bucketPath = generateBucketPath(title, initialData?.id, `room-types/${roomTypeName}`);
+
+      // Upload images
+      const uploadResults = await uploadImages(files, bucketPath);
+
+      // Check for errors
+      const errors = uploadResults.filter(result => result.error);
+      if (errors.length > 0) {
+        toast.error(`Échec du téléchargement de ${errors.length} image(s)`);
+        setUploadingRoomTypeId(null);
+        return;
+      }
+
+      // Get URLs from successful uploads
+      const uploadedUrls = uploadResults.map(result => result.url);
+
+      // Find current room type to get existing images
+      const currentRoomType = roomTypes?.find(rt => rt.id === roomTypeId);
+      const existingImages = currentRoomType?.images || [];
+
+      // Combine with existing images
+      const allImages = [...existingImages, ...uploadedUrls];
+
+      // Update room type with new images
+      await updateRoomTypeMutation.mutateAsync({
+        id: roomTypeId,
+        updates: { images: allImages },
+      });
+
+      // Clear uploaded files for this room type
+      setRoomTypeImages(prev => ({ ...prev, [roomTypeId]: [] }));
+      setUploadingRoomTypeId(null);
+    } catch (error) {
+      setUploadingRoomTypeId(null);
+      toast.error('Erreur lors du téléchargement');
+      console.error('Room type image upload error:', error);
+    }
+  };
+
   const handleFormSubmit = async (data: CreateExperienceInput) => {
     if (isReadOnly) {
       return; // Prevent submission for active experiences when partner
     }
+
     try {
+      // Upload images if there are new files
+      if (imageFiles.length > 0) {
+        setIsUploadingImages(true);
+        toast.info('Téléchargement des images...');
+
+        // Generate bucket path
+        const experienceId = isEditMode ? initialData?.id : undefined;
+        const bucketPath = generateBucketPath(data.title, experienceId);
+
+        // Upload images
+        const uploadResults = await uploadImages(imageFiles, bucketPath);
+
+        // Check for errors
+        const errors = uploadResults.filter(result => result.error);
+        if (errors.length > 0) {
+          toast.error(`Échec du téléchargement de ${errors.length} image(s)`);
+          setIsUploadingImages(false);
+          return;
+        }
+
+        // Get URLs from successful uploads
+        const uploadedUrls = uploadResults.map(result => result.url);
+
+        // Combine with existing images (for edit mode)
+        const allImages = [...data.images, ...uploadedUrls];
+
+        // Update data with uploaded image URLs
+        data.images = allImages;
+        data.image_url = allImages[0] || data.image_url;
+
+        setIsUploadingImages(false);
+        toast.success('Images téléchargées avec succès');
+      }
+
+      // Submit form
       if (isEditMode && initialData?.id) {
         await onSubmit({ ...data, id: initialData.id });
       } else {
         await onSubmit(data);
       }
+
       if (!isEditMode) {
         reset();
+        setImageFiles([]);
       }
       onOpenChange(false);
     } catch (error) {
-      // Error handled by parent
+      setIsUploadingImages(false);
+      toast.error('Erreur lors de la soumission');
       console.error('Form submission error:', error);
     }
   };
@@ -294,11 +436,12 @@ export function CreateExperienceDialog({
               </div>
             )}
             <Tabs defaultValue="general" className="w-full">
-              <TabsList className="grid w-full grid-cols-5 mb-6">
+              <TabsList className="grid w-full grid-cols-6 mb-6">
                 <TabsTrigger value="general">Général</TabsTrigger>
                 <TabsTrigger value="images">Images</TabsTrigger>
                 <TabsTrigger value="location">Localisation</TabsTrigger>
                 <TabsTrigger value="amenities">Équipements</TabsTrigger>
+                <TabsTrigger value="room-types">Types de Chambres</TabsTrigger>
                 <TabsTrigger value="schedules">Horaires</TabsTrigger>
               </TabsList>
 
@@ -489,78 +632,64 @@ export function CreateExperienceDialog({
                   </span>
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Ajouter une image *</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={newImage}
-                      onChange={(e) => setNewImage(e.target.value)}
-                      placeholder="https://example.com/image.jpg"
-                      onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          addImage();
-                        }
-                      }}
-                    />
-                    <Button type="button" onClick={addImage} size="icon">
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  {errors.images && (
-                    <p className="text-sm text-destructive">
-                      {errors.images.message || 'Au moins une image est requise'}
-                    </p>
-                  )}
-                </div>
+                {errors.images && (
+                  <p className="text-sm text-destructive">
+                    {errors.images.message || 'Au moins une image est requise'}
+                  </p>
+                )}
 
-                {images.length > 0 ? (
-                  <div className="grid grid-cols-3 gap-4">
-                    {images.map((img, index) => (
-                      <div
-                        key={index}
-                        className="relative group rounded-lg border overflow-hidden bg-muted"
-                      >
-                        <img
-                          src={img}
-                          alt={`Image ${index + 1}`}
-                          className="w-full h-48 object-cover"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src =
-                              'https://via.placeholder.com/400x300?text=Image+Error';
-                          }}
-                        />
-                        {index === 0 && (
-                          <Badge className="absolute top-2 left-2 bg-primary">
-                            Image principale
-                          </Badge>
-                        )}
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="icon"
-                          className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
-                          onClick={() => removeImage(index)}
+                {/* Existing Images (Edit Mode) */}
+                {isEditMode && images.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Images existantes</Label>
+                    <div className="grid grid-cols-3 gap-4">
+                      {images.map((img, index) => (
+                        <div
+                          key={index}
+                          className="relative group rounded-lg border overflow-hidden bg-muted"
                         >
-                          <X className="h-4 w-4" />
-                        </Button>
-                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-2 truncate">
-                          {img}
+                          <img
+                            src={img}
+                            alt={`Image existante ${index + 1}`}
+                            className="w-full h-48 object-cover"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src =
+                                'https://via.placeholder.com/400x300?text=Image+Error';
+                            }}
+                          />
+                          {index === 0 && (
+                            <Badge className="absolute top-2 left-2 bg-primary">
+                              Image principale
+                            </Badge>
+                          )}
+                          {!isReadOnly && (
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8"
+                              onClick={() => removeImage(index)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-lg bg-muted/20">
-                    <Upload className="h-16 w-16 text-muted-foreground mb-4" />
-                    <p className="text-sm text-muted-foreground mb-1">
-                      Aucune image ajoutée
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Ajoutez des URLs d'images ci-dessus
-                    </p>
+                      ))}
+                    </div>
                   </div>
                 )}
+
+                {/* New Images Upload */}
+                <div className="space-y-2">
+                  <Label>{isEditMode ? 'Ajouter de nouvelles images' : 'Images de l\'expérience *'}</Label>
+                  <ImageUpload
+                    files={imageFiles}
+                    onChange={setImageFiles}
+                    maxImages={10}
+                    disabled={isReadOnly || isUploadingImages}
+                    showMainBadge={!isEditMode || images.length === 0}
+                  />
+                </div>
               </TabsContent>
 
               {/* ===== LOCATION TAB ===== */}
@@ -854,6 +983,192 @@ export function CreateExperienceDialog({
                     </div>
                   </div>
                 </div>
+
+                <Separator />
+
+                {/* Extras (Optional Add-ons) */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold">Options supplémentaires (Extras)</h3>
+
+                  <div className="space-y-2">
+                    <Label>Ajouter un extra</Label>
+                    <div className="grid grid-cols-12 gap-2">
+                      <Input
+                        value={newExtra.emoji}
+                        onChange={(e) => setNewExtra({ ...newExtra, emoji: e.target.value })}
+                        placeholder="Emoji"
+                        maxLength={2}
+                        className="col-span-1"
+                      />
+                      <Input
+                        value={newExtra.label}
+                        onChange={(e) => setNewExtra({ ...newExtra, label: e.target.value })}
+                        placeholder="Ex: Pétales de rose, bouquet de fleurs, etc."
+                        className="col-span-6"
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            addExtra();
+                          }
+                        }}
+                      />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={newExtra.price}
+                        onChange={(e) => setNewExtra({ ...newExtra, price: +e.target.value || 0 })}
+                        placeholder="Prix"
+                        className="col-span-4"
+                      />
+                      <Button type="button" onClick={addExtra} size="icon" className="col-span-1">
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {extras.length > 0 && (
+                    <div className="flex flex-wrap gap-2 p-4 rounded-lg border bg-muted/20">
+                      {extras.map((extra, index) => (
+                        <Badge
+                          key={index}
+                          variant="secondary"
+                          className="gap-2 text-sm py-1.5 px-3"
+                        >
+                          <span>{extra.emoji}</span>
+                          <span>{extra.label}</span>
+                          <span className="font-semibold">{extra.price.toFixed(2)}€</span>
+                          <button
+                            type="button"
+                            onClick={() => removeExtra(index)}
+                            className="ml-1 hover:text-destructive transition-colors"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+
+              {/* ===== ROOM TYPES TAB ===== */}
+              <TabsContent value="room-types" className="space-y-6 pb-6">
+                <div className="flex items-center gap-2 text-muted-foreground mb-4">
+                  <Info className="h-5 w-5" />
+                  <span className="text-sm">
+                    Gérez les images pour chaque type de chambre de cette expérience
+                  </span>
+                </div>
+
+                {!isEditMode ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-lg bg-muted/20">
+                    <Info className="h-16 w-16 text-muted-foreground mb-4" />
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Créez d'abord l'expérience
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Les types de chambres et leurs images peuvent être gérés après la création de l'expérience
+                    </p>
+                  </div>
+                ) : !roomTypes || roomTypes.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed rounded-lg bg-muted/20">
+                    <Info className="h-16 w-16 text-muted-foreground mb-4" />
+                    <p className="text-sm text-muted-foreground mb-1">
+                      Aucun type de chambre trouvé
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Créez des types de chambres via la gestion des types de chambres avant d'ajouter des images
+                    </p>
+                  </div>
+                ) : (
+                  <Accordion type="single" collapsible className="w-full space-y-2">
+                    {roomTypes.map((roomType) => (
+                      <AccordionItem key={roomType.id} value={roomType.id} className="border rounded-lg px-4">
+                        <AccordionTrigger className="hover:no-underline">
+                          <div className="flex items-center justify-between w-full pr-4">
+                            <div className="flex flex-col items-start">
+                              <span className="font-medium">{roomType.name}</span>
+                              {roomType.description && (
+                                <span className="text-sm text-muted-foreground mt-1">
+                                  {roomType.description}
+                                </span>
+                              )}
+                            </div>
+                            <Badge variant="secondary">
+                              {roomType.images?.length || 0} image(s)
+                            </Badge>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pt-4 space-y-4">
+                          {/* Existing Images */}
+                          {roomType.images && roomType.images.length > 0 && (
+                            <div className="space-y-2">
+                              <Label>Images existantes</Label>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                {roomType.images.map((img: string, index: number) => (
+                                  <div
+                                    key={index}
+                                    className="relative rounded-lg border overflow-hidden bg-muted aspect-square"
+                                  >
+                                    <img
+                                      src={img}
+                                      alt={`${roomType.name} image ${index + 1}`}
+                                      className="w-full h-full object-cover"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src =
+                                          'https://via.placeholder.com/400x300?text=Image+Error';
+                                      }}
+                                    />
+                                    {index === 0 && (
+                                      <Badge className="absolute top-2 left-2 bg-primary">
+                                        Principale
+                                      </Badge>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* New Images Upload */}
+                          <div className="space-y-2">
+                            <Label>Ajouter de nouvelles images</Label>
+                            <ImageUpload
+                              files={roomTypeImages[roomType.id] || []}
+                              onChange={(files) => {
+                                setRoomTypeImages(prev => ({ ...prev, [roomType.id]: files }));
+                              }}
+                              maxImages={10}
+                              disabled={isReadOnly || uploadingRoomTypeId === roomType.id}
+                              showMainBadge={!roomType.images || roomType.images.length === 0}
+                            />
+                          </div>
+
+                          {/* Save Button */}
+                          {(roomTypeImages[roomType.id]?.length || 0) > 0 && (
+                            <div className="flex justify-end">
+                              <Button
+                                type="button"
+                                onClick={() => handleRoomTypeImageUpload(roomType.id, roomType.name)}
+                                disabled={uploadingRoomTypeId === roomType.id}
+                              >
+                                {uploadingRoomTypeId === roomType.id ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Téléchargement...
+                                  </>
+                                ) : (
+                                  'Enregistrer les images'
+                                )}
+                              </Button>
+                            </div>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
+                )}
               </TabsContent>
 
               {/* ===== SCHEDULES TAB ===== */}
@@ -912,17 +1227,27 @@ export function CreateExperienceDialog({
               variant="outline"
               onClick={() => {
                 reset();
+                setImageFiles([]);
                 onOpenChange(false);
               }}
-              disabled={loading}
+              disabled={loading || isUploadingImages}
             >
               Annuler
             </Button>
-            <Button type="submit" disabled={loading || isReadOnly}>
-              {loading 
-                ? (isEditMode ? 'Modification en cours...' : 'Création en cours...') 
-                : (isEditMode ? 'Modifier l\'expérience' : 'Créer l\'expérience')
-              }
+            <Button type="submit" disabled={loading || isReadOnly || isUploadingImages}>
+              {isUploadingImages ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Téléchargement des images...
+                </>
+              ) : loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {isEditMode ? 'Modification en cours...' : 'Création en cours...'}
+                </>
+              ) : (
+                isEditMode ? 'Modifier l\'expérience' : 'Créer l\'expérience'
+              )}
             </Button>
           </DialogFooter>
         </form>

@@ -16,19 +16,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { ImageUpload } from '@/components/ui/ImageUpload';
+import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import type { RoomType } from '@/../../shared/types/entities';
+import { uploadImages, generateBucketPath } from '@/lib/supabaseUpload';
+import { toast } from 'sonner';
 
 interface ManageRoomTypesDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   roomTypes: RoomType[];
   experienceId: string;
+  experienceName: string;
   onCreate: (data: {
     name: string;
     description: string;
     base_capacity: number;
     max_capacity: number;
+    size?: number;
+    bed_type?: string;
+    amenities?: string[];
+    images?: string[];
   }) => void;
   onUpdate: (id: string, data: Partial<RoomType>) => void;
   onDelete: (id: string) => void;
@@ -39,6 +47,7 @@ export function ManageRoomTypesDialog({
   onOpenChange,
   roomTypes,
   experienceId,
+  experienceName,
   onCreate,
   onUpdate,
   onDelete,
@@ -50,7 +59,12 @@ export function ManageRoomTypesDialog({
     description: '',
     base_capacity: 2,
     max_capacity: 4,
+    size: '',
+    bed_type: '',
+    amenities: '',
   });
+  const [imageFiles, setImageFiles] = React.useState<File[]>([]);
+  const [isUploading, setIsUploading] = React.useState(false);
 
   const resetForm = () => {
     setFormData({
@@ -58,7 +72,11 @@ export function ManageRoomTypesDialog({
       description: '',
       base_capacity: 2,
       max_capacity: 4,
+      size: '',
+      bed_type: '',
+      amenities: '',
     });
+    setImageFiles([]);
     setEditingRoomType(null);
     setMode('list');
   };
@@ -74,29 +92,91 @@ export function ManageRoomTypesDialog({
       description: roomType.description || '',
       base_capacity: roomType.baseCapacity,
       max_capacity: roomType.maxCapacity,
+      size: roomType.size?.toString() || '',
+      bed_type: roomType.bedType || '',
+      amenities: Array.isArray(roomType.amenities) ? roomType.amenities.join(', ') : '',
     });
     setMode('edit');
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    let uploadedImageUrls: string[] = [];
+
+    // Upload images if there are any
+    if (imageFiles.length > 0) {
+      setIsUploading(true);
+      toast.info('Téléchargement des images...');
+
+      try {
+        // Generate bucket path
+        const bucketPath = generateBucketPath(
+          experienceName,
+          experienceId,
+          `room-types/${formData.name}`
+        );
+
+        // Upload images
+        const uploadResults = await uploadImages(imageFiles, bucketPath);
+
+        // Check for errors
+        const errors = uploadResults.filter(result => result.error);
+        if (errors.length > 0) {
+          toast.error(`Échec du téléchargement de ${errors.length} image(s)`);
+          setIsUploading(false);
+          return;
+        }
+
+        // Get URLs from successful uploads
+        uploadedImageUrls = uploadResults.map(result => result.url);
+        toast.success('Images téléchargées avec succès');
+      } catch (error) {
+        toast.error('Erreur lors du téléchargement des images');
+        console.error('Image upload error:', error);
+        setIsUploading(false);
+        return;
+      }
+
+      setIsUploading(false);
+    }
+
     if (mode === 'create') {
+      const amenitiesArray = formData.amenities
+        ? formData.amenities.split(',').map(a => a.trim()).filter(Boolean)
+        : [];
+
       onCreate({
         name: formData.name,
         description: formData.description,
         base_capacity: formData.base_capacity,
         max_capacity: formData.max_capacity,
+        size: formData.size ? parseInt(formData.size) : undefined,
+        bed_type: formData.bed_type || undefined,
+        amenities: amenitiesArray.length > 0 ? amenitiesArray : undefined,
+        images: uploadedImageUrls,
       });
     } else if (mode === 'edit' && editingRoomType) {
+      // Combine existing images with new uploads
+      const existingImages = editingRoomType.images || [];
+      const allImages = [...existingImages, ...uploadedImageUrls];
+
+      const amenitiesArray = formData.amenities
+        ? formData.amenities.split(',').map(a => a.trim()).filter(Boolean)
+        : [];
+
       onUpdate(editingRoomType.id, {
         name: formData.name,
         description: formData.description,
         baseCapacity: formData.base_capacity,
         maxCapacity: formData.max_capacity,
+        size: formData.size ? parseInt(formData.size) : null,
+        bedType: formData.bed_type || null,
+        amenities: amenitiesArray.length > 0 ? amenitiesArray : null,
+        images: uploadedImageUrls.length > 0 ? allImages : undefined,
       });
     }
-    
+
     resetForm();
   };
 
@@ -113,7 +193,7 @@ export function ManageRoomTypesDialog({
         resetForm();
       }
     }}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-full sm:max-w-[40vw] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {mode === 'list' && 'Gérer les Types de Chambres'}
@@ -150,9 +230,16 @@ export function ManageRoomTypesDialog({
                       <p className="text-sm text-gray-600">
                         {roomType.description || 'Aucune description'}
                       </p>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Capacité: {roomType.baseCapacity}-{roomType.maxCapacity} personnes
-                      </p>
+                      <div className="flex flex-wrap gap-3 text-sm text-gray-500 mt-1">
+                        <span>Capacité: {roomType.baseCapacity}-{roomType.maxCapacity} personnes</span>
+                        {roomType.size && <span>• {roomType.size} m²</span>}
+                        {roomType.bedType && <span>• {roomType.bedType}</span>}
+                      </div>
+                      {Array.isArray(roomType.amenities) && roomType.amenities.length > 0 && (
+                        <p className="text-sm text-gray-500 mt-1">
+                          Équipements: {roomType.amenities.join(', ')}
+                        </p>
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <Button
@@ -227,12 +314,84 @@ export function ManageRoomTypesDialog({
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="size">Taille (m²)</Label>
+                <Input
+                  id="size"
+                  type="number"
+                  min="1"
+                  value={formData.size}
+                  onChange={(e) => setFormData({ ...formData, size: e.target.value })}
+                  placeholder="ex: 28"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="bed_type">Type de Lit</Label>
+                <Input
+                  id="bed_type"
+                  value={formData.bed_type}
+                  onChange={(e) => setFormData({ ...formData, bed_type: e.target.value })}
+                  placeholder="ex: Lit king size"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="amenities">Équipements</Label>
+              <Input
+                id="amenities"
+                value={formData.amenities}
+                onChange={(e) => setFormData({ ...formData, amenities: e.target.value })}
+                placeholder="ex: Douche, Baignoire, TV, Mini bar"
+              />
+              <p className="text-sm text-muted-foreground">
+                Séparez les équipements par des virgules
+              </p>
+            </div>
+
+            {/* Image Upload Section */}
+            <div className="space-y-2">
+              <Label>Images du type de chambre</Label>
+              {mode === 'edit' && editingRoomType?.images && editingRoomType.images.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-sm text-muted-foreground mb-2">Images existantes</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {editingRoomType.images.map((img, index) => (
+                      <div key={index} className="relative aspect-square rounded-lg border overflow-hidden">
+                        <img
+                          src={img}
+                          alt={`${editingRoomType.name} ${index + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <ImageUpload
+                files={imageFiles}
+                onChange={setImageFiles}
+                maxImages={10}
+                disabled={isUploading}
+                showMainBadge={!editingRoomType?.images || editingRoomType.images.length === 0}
+              />
+            </div>
+
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={resetForm}>
+              <Button type="button" variant="outline" onClick={resetForm} disabled={isUploading}>
                 Annuler
               </Button>
-              <Button type="submit">
-                {mode === 'create' ? 'Créer' : 'Mettre à jour'}
+              <Button type="submit" disabled={isUploading}>
+                {isUploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Téléchargement...
+                  </>
+                ) : (
+                  mode === 'create' ? 'Créer' : 'Mettre à jour'
+                )}
               </Button>
             </DialogFooter>
           </form>

@@ -311,6 +311,7 @@ export function CalendarManagementDialog({
             onOpenChange={setManageRoomTypesOpen}
             roomTypes={[]}
             experienceId={experienceId}
+            experienceName={experienceName}
             onCreate={handleCreateRoomType}
             onUpdate={handleUpdateRoomType}
             onDelete={handleDeleteRoomType}
@@ -395,6 +396,7 @@ export function CalendarManagementDialog({
         onOpenChange={setManageRoomTypesOpen}
         roomTypes={roomTypes}
         experienceId={experienceId}
+        experienceName={experienceName}
         onCreate={handleCreateRoomType}
         onUpdate={handleUpdateRoomType}
         onDelete={handleDeleteRoomType}
