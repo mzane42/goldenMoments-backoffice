@@ -15,10 +15,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useTableState } from '@/hooks/useTableState';
 import { trpc } from '@/lib/trpc';
-import { Plus, ShoppingBag, Star } from 'lucide-react';
+import { Plus, ShoppingBag, Star, Calendar as CalendarIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ExperienceWithRelations } from '@/../../shared/types/entities';
 import type { CreateExperienceInput } from '@/../../shared/schemas/experience';
+import { CalendarManagementDialog } from '@/components/calendar/CalendarManagementDialog';
 import {
   formatCurrency,
   formatDate,
@@ -43,6 +44,10 @@ export default function PartnerExperiences() {
   // Edit dialog state
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
   const [editingExperience, setEditingExperience] = React.useState<ExperienceWithRelations | null>(null);
+
+  // Calendar dialog state
+  const [calendarDialogOpen, setCalendarDialogOpen] = React.useState(false);
+  const [calendarExperience, setCalendarExperience] = React.useState<ExperienceWithRelations | null>(null);
 
   // Fetch partner's experiences
   const { data, isLoading, error, refetch } = trpc.partner.experiences.list.useQuery({
@@ -113,6 +118,11 @@ export default function PartnerExperiences() {
     setDeleteDialogOpen(true);
   };
 
+  const handleManageCalendar = (experience: ExperienceWithRelations) => {
+    setCalendarExperience(experience);
+    setCalendarDialogOpen(true);
+  };
+
   const confirmDelete = async () => {
     if (!deletingExperience) return;
     await deleteMutation.mutateAsync({ id: deletingExperience.id });
@@ -125,7 +135,7 @@ export default function PartnerExperiences() {
   const handleUpdate = async (data: CreateExperienceInput & { id?: string }) => {
     if (!data.id) return;
     await updateMutation.mutateAsync({ 
-      id: parseInt(data.id), 
+      id: data.id, 
       updates: data 
     });
   };
@@ -227,6 +237,13 @@ export default function PartnerExperiences() {
               onView={() => handleView(row)}
               onEdit={() => handleEdit(row)}
               onDelete={() => handleDelete(row)}
+              additionalActions={[
+                {
+                  label: 'Gérer le calendrier',
+                  icon: <CalendarIcon className="h-4 w-4" />,
+                  onClick: () => handleManageCalendar(row),
+                },
+              ]}
             />
           )}
           emptyStateTitle="Aucune expérience"
@@ -274,6 +291,17 @@ export default function PartnerExperiences() {
           mode="edit"
           isPartner={true}
         />
+
+        {/* Calendar Management Dialog */}
+        {calendarExperience && (
+          <CalendarManagementDialog
+            open={calendarDialogOpen}
+            onOpenChange={setCalendarDialogOpen}
+            experienceId={calendarExperience.id}
+            experienceName={calendarExperience.title}
+            isAdmin={false}
+          />
+        )}
       </div>
     </PartnerLayout>
   );
