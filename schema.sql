@@ -14,6 +14,22 @@ CREATE TABLE public.admins (
   CONSTRAINT admins_pkey PRIMARY KEY (id),
   CONSTRAINT admins_auth_id_fkey FOREIGN KEY (auth_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.availability_periods (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  experience_id uuid NOT NULL,
+  room_type_id uuid NOT NULL,
+  date date NOT NULL,
+  price numeric NOT NULL CHECK (price >= 0::numeric),
+  original_price numeric NOT NULL CHECK (original_price >= 0::numeric),
+  discount_percentage integer DEFAULT 0 CHECK (discount_percentage >= 0 AND discount_percentage <= 100),
+  available_rooms integer NOT NULL DEFAULT 1 CHECK (available_rooms >= 0),
+  is_available boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT availability_periods_pkey PRIMARY KEY (id),
+  CONSTRAINT availability_periods_experience_id_fkey FOREIGN KEY (experience_id) REFERENCES public.experiences(id),
+  CONSTRAINT availability_periods_room_type_id_fkey FOREIGN KEY (room_type_id) REFERENCES public.room_types(id)
+);
 CREATE TABLE public.experiences (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   title text NOT NULL,
@@ -41,6 +57,8 @@ CREATE TABLE public.experiences (
   created_by uuid,
   last_modified_by uuid,
   partner_id uuid,
+  default_price numeric CHECK (default_price >= 0::numeric),
+  extras jsonb DEFAULT '[]'::jsonb,
   CONSTRAINT experiences_pkey PRIMARY KEY (id),
   CONSTRAINT experiences_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
   CONSTRAINT experiences_last_modified_by_fkey FOREIGN KEY (last_modified_by) REFERENCES auth.users(id),
@@ -135,6 +153,23 @@ CREATE TABLE public.reviews (
   CONSTRAINT reviews_experience_id_fkey FOREIGN KEY (experience_id) REFERENCES public.experiences(id),
   CONSTRAINT reviews_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
   CONSTRAINT reviews_reservation_id_fkey FOREIGN KEY (reservation_id) REFERENCES public.reservations(id)
+);
+CREATE TABLE public.room_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  experience_id uuid NOT NULL,
+  name text NOT NULL,
+  description text,
+  base_capacity integer NOT NULL DEFAULT 2 CHECK (base_capacity > 0),
+  max_capacity integer NOT NULL DEFAULT 4,
+  amenities jsonb DEFAULT '{}'::jsonb,
+  images ARRAY DEFAULT ARRAY[]::text[],
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  size integer,
+  bed_type text,
+  extras jsonb DEFAULT '[]'::jsonb,
+  CONSTRAINT room_types_pkey PRIMARY KEY (id),
+  CONSTRAINT room_types_experience_id_fkey FOREIGN KEY (experience_id) REFERENCES public.experiences(id)
 );
 CREATE TABLE public.users (
   id uuid NOT NULL DEFAULT gen_random_uuid(),

@@ -81,6 +81,7 @@ export const createExperienceSchema = z.object({
   additional_info: additionalInfoSchema.optional(),
   schedules: schedulesSchema.optional(),
   extras: extrasSchema.optional(),
+  allowed_nights: z.array(z.number().int().positive().max(30)).min(1, 'Au moins une durée de nuit doit être sélectionnée').default([1, 2, 3]),
   date_start: z.string().optional(),
   date_end: z.string().optional(),
   company: z.string().optional(),

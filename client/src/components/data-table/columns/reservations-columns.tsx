@@ -51,6 +51,29 @@ export const reservationsColumns: DataTableColumn<ReservationWithRelations>[] = 
     ),
   },
   {
+    id: 'roomType',
+    header: 'Type de chambre',
+    cell: (row) => (
+      <span className="text-sm">
+        {row.roomTypeDetails?.name || row.roomType || '-'}
+      </span>
+    ),
+  },
+  {
+    id: 'nights',
+    header: 'Nuits',
+    cell: (row) => {
+      const nights = row.checkInDate && row.checkOutDate
+        ? Math.ceil((new Date(row.checkOutDate).getTime() - new Date(row.checkInDate).getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+      return (
+        <span className="text-sm font-medium">
+          {nights ?? '-'} {nights && (nights === 1 ? 'nuit' : 'nuits')}
+        </span>
+      );
+    },
+  },
+  {
     id: 'checkInDate',
     header: "Date d'arrivée",
     accessorKey: 'checkInDate',

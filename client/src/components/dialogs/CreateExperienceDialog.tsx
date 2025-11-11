@@ -88,7 +88,7 @@ export function CreateExperienceDialog({
     reset,
     control,
   } = useForm<CreateExperienceInput>({
-    resolver: zodResolver(createExperienceSchema),
+    resolver: zodResolver(createExperienceSchema) as any,
     defaultValues: {
       title: '',
       description: '',
@@ -123,6 +123,7 @@ export function CreateExperienceDialog({
         fitness_center: '',
       },
       extras: [],
+      allowed_nights: [1, 2, 3], // Default: flexible booking (1-3 nights)
       date_start: '',
       date_end: '',
       company: '',
@@ -228,6 +229,7 @@ export function CreateExperienceDialog({
         initialData.schedules ??
         { breakfast: '', dinner: '', pool: '', fitness_center: '' },
       extras: initialData.extras ?? [],
+      allowed_nights: initialData.allowed_nights ?? initialData.allowedNights ?? [1, 2, 3],
       date_start: initialData.date_start ?? initialData.dateStart ?? '',
       date_end: initialData.date_end ?? initialData.dateEnd ?? '',
       company: initialData.company ?? '',
@@ -418,7 +420,7 @@ export function CreateExperienceDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(handleFormSubmit as (data: CreateExperienceInput) => Promise<void>)} className="flex flex-col h-full">
+        <form onSubmit={handleSubmit(handleFormSubmit)} className="flex flex-col h-full">
           <ScrollArea className="flex-1 px-6">
             {isReadOnly && (
               <div className="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
@@ -572,6 +574,54 @@ export function CreateExperienceDialog({
                       placeholder="Ex: Marriott International"
                     />
                   </div>
+                </div>
+
+                <Separator />
+
+                {/* Allowed Nights */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Durées de séjour autorisées *</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Sélectionnez les nombres de nuits que les clients peuvent réserver
+                    </p>
+                  </div>
+                  <Controller
+                    name="allowed_nights"
+                    control={control}
+                    render={({ field }) => {
+                      const allowedNights = field.value || [1, 2, 3];
+                      const toggleNight = (night: number) => {
+                        if (allowedNights.includes(night)) {
+                          const newValue = allowedNights.filter((n) => n !== night);
+                          // Ensure at least one night is selected
+                          if (newValue.length > 0) {
+                            field.onChange(newValue);
+                          }
+                        } else {
+                          field.onChange([...allowedNights, night].sort((a, b) => a - b));
+                        }
+                      };
+
+                      return (
+                        <div className="flex flex-wrap gap-2 p-4 rounded-lg border bg-muted/20">
+                          {[1, 2, 3, 4, 5, 7].map((night) => (
+                            <Badge
+                              key={night}
+                              variant={allowedNights.includes(night) ? 'default' : 'outline'}
+                              className="cursor-pointer text-sm py-2 px-4"
+                              onClick={() => toggleNight(night)}
+                            >
+                              {night} {night === 1 ? 'nuit' : 'nuits'}
+                            </Badge>
+                          ))}
+                        </div>
+                      );
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Au moins une durée doit être sélectionnée. Les clients ne pourront réserver que les durées autorisées.
+                  </p>
                 </div>
 
                 {/* Dates */}

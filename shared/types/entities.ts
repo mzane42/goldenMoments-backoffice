@@ -98,6 +98,25 @@ export interface Experience {
   createdBy: UUID | null;
   lastModifiedBy: UUID | null;
   partnerId: UUID | null;
+  allowedNights: number[]; // Allowed night durations (e.g., [1,2,3] = flexible, [2] = 2-nights only)
+}
+
+// Price Breakdown (stored as JSONB in reservations)
+export interface PriceBreakdown {
+  nights: number;
+  roomType: string;
+  nightlyRates: Array<{
+    date: string;
+    price: number;
+  }>;
+  subtotal: number;
+  extras?: Array<{
+    label: string;
+    price: number;
+    quantity: number;
+  }>;
+  extrasTotal?: number;
+  total: number;
 }
 
 // Reservation entity
@@ -224,6 +243,7 @@ export interface AvailabilityPeriod {
 export interface ReservationWithRelations extends Reservation {
   user?: User;
   experience?: Experience;
+  roomTypeDetails?: RoomType;
 }
 
 export interface ExperienceWithRelations extends Experience {

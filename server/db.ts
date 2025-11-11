@@ -1069,3 +1069,139 @@ export async function getAvailabilitySummary(
 
   return data || [];
 }
+
+// =====================================================
+// NIGHT OPTIONS & RESERVATION PRICING
+// =====================================================
+
+/**
+ * Calculate number of nights between two dates
+ */
+export function calculateNights(checkInDate: string, checkOutDate: string): number {
+  const checkIn = new Date(checkInDate);
+  const checkOut = new Date(checkOutDate);
+  const diffTime = Math.abs(checkOut.getTime() - checkIn.getTime());
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return diffDays;
+}
+
+/**
+ * Validate if the selected number of nights is allowed for an experience
+ */
+export async function validateNightSelection(
+  experienceId: string,
+  nights: number
+): Promise<{ valid: boolean; allowedNights: number[] }> {
+  const { data, error } = await supabaseAdmin
+    .from('experiences')
+    .select('allowed_nights')
+    .eq('id', experienceId)
+    .single();
+
+  if (error) {
+    console.error('[Database] Error fetching experience allowed_nights:', error);
+    throw error;
+  }
+
+  const allowedNights = data?.allowed_nights || [1, 2, 3];
+  const valid = allowedNights.includes(nights);
+
+  return { valid, allowedNights };
+}
+
+/**
+ * Calculate reservation price with detailed breakdown
+ */
+export async function calculateReservationPrice(params: {
+  experienceId: string;
+  roomTypeId: string;
+  checkInDate: string;
+  checkOutDate: string;
+  extras?: Array<{ label: string; price: number; quantity: number }>;
+}): Promise<{
+  totalPrice: number;
+  priceBreakdown: {
+    nights: number;
+    roomType: string;
+    nightlyRates: Array<{ date: string; price: number }>;
+    subtotal: number;
+    extras?: Array<{ label: string; price: number; quantity: number }>;
+    extrasTotal?: number;
+    total: number;
+  };
+}> {
+  const { experienceId, roomTypeId, checkInDate, checkOutDate, extras } = params;
+
+  // Calculate number of nights
+  const nights = calculateNights(checkInDate, checkOutDate);
+
+  // Get room type details
+  const { data: roomType, error: roomTypeError } = await supabaseAdmin
+    .from('room_types')
+    .select('name')
+    .eq('id', roomTypeId)
+    .single();
+
+  if (roomTypeError) {
+    console.error('[Database] Error fetching room type:', roomTypeError);
+    throw roomTypeError;
+  }
+
+  // Get availability periods for the date range (excluding checkout date)
+  const availabilityPeriods = await getAvailabilityByDateRange(
+    experienceId,
+    checkInDate,
+    checkOutDate,
+    roomTypeId
+  );
+
+  // Build nightly rates array
+  const nightlyRates: Array<{ date: string; price: number }> = [];
+  let subtotal = 0;
+
+  // Generate array of dates from check-in to check-out (excluding checkout)
+  const checkIn = new Date(checkInDate);
+  const dates: string[] = [];
+  for (let i = 0; i < nights; i++) {
+    const currentDate = new Date(checkIn);
+    currentDate.setDate(checkIn.getDate() + i);
+    dates.push(currentDate.toISOString().split('T')[0]);
+  }
+
+  // Match dates with availability periods
+  for (const date of dates) {
+    const period = availabilityPeriods.find((p: any) => p.date === date);
+    if (!period) {
+      throw new Error(`No availability period found for date: ${date}`);
+    }
+    if (!period.is_available) {
+      throw new Error(`Selected date is not available: ${date}`);
+    }
+    nightlyRates.push({
+      date,
+      price: Number(period.price),
+    });
+    subtotal += Number(period.price);
+  }
+
+  // Calculate extras total
+  let extrasTotal = 0;
+  if (extras && extras.length > 0) {
+    extrasTotal = extras.reduce((sum, extra) => sum + extra.price * extra.quantity, 0);
+  }
+
+  // Calculate total
+  const totalPrice = subtotal + extrasTotal;
+
+  // Build price breakdown
+  const priceBreakdown = {
+    nights,
+    roomType: roomType.name,
+    nightlyRates,
+    subtotal,
+    ...(extras && extras.length > 0 && { extras, extrasTotal }),
+    total: totalPrice,
+  };
+
+  return { totalPrice, priceBreakdown };
+}

@@ -34,6 +34,12 @@ export const appRouter = router({
     }),
 
     // Gestion des réservations
+    // NOTE: Reservation creation with night validation and pricing
+    // When creating reservations, use these helper functions from db.ts:
+    // - validateNightSelection(experienceId, nights) - Validates nights against experience.allowed_nights
+    // - calculateReservationPrice(params) - Calculates total price with breakdown from availability_periods
+    // - calculateNights(checkInDate, checkOutDate) - Helper to calculate night count
+    // The reservation should include: room_type_id, nights, price_breakdown, total_price
     reservations: router({
       list: adminProcedure
         .input(z.object({
@@ -94,24 +100,45 @@ export const appRouter = router({
         .query(async ({ input }) => {
           return db.getExperiencesPaginated(input);
         }),
-      
+
       create: adminProcedure
         .input(z.any())
         .mutation(async ({ input, ctx }) => {
+          // Validate allowed_nights if provided
+          if (input.allowed_nights) {
+            if (!Array.isArray(input.allowed_nights) || input.allowed_nights.length === 0) {
+              throw new Error('allowed_nights must be a non-empty array');
+            }
+            if (!input.allowed_nights.every((n: number) => Number.isInteger(n) && n > 0 && n <= 30)) {
+              throw new Error('allowed_nights must contain positive integers between 1 and 30');
+            }
+          }
+
           const experience = await db.createExperience({
             ...input,
+            allowed_nights: input.allowed_nights || [1, 2, 3], // Default: flexible booking
             created_by: ctx.user.authId,
             last_modified_by: ctx.user.authId,
           });
           return experience;
         }),
-      
+
       update: adminProcedure
         .input(z.object({
           id: z.string(),
           updates: z.any(),
         }))
         .mutation(async ({ input, ctx }) => {
+          // Validate allowed_nights if being updated
+          if (input.updates.allowed_nights) {
+            if (!Array.isArray(input.updates.allowed_nights) || input.updates.allowed_nights.length === 0) {
+              throw new Error('allowed_nights must be a non-empty array');
+            }
+            if (!input.updates.allowed_nights.every((n: number) => Number.isInteger(n) && n > 0 && n <= 30)) {
+              throw new Error('allowed_nights must contain positive integers between 1 and 30');
+            }
+          }
+
           await db.updateExperience(input.id, {
             ...input.updates,
             last_modified_by: ctx.user.authId,
