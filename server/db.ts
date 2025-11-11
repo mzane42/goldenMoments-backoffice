@@ -1,4 +1,5 @@
 import { supabaseAdmin } from './supabase';
+import { BadRequestError } from '../shared/_core/errors';
 
 // =====================================================
 // TYPES
@@ -1192,9 +1193,20 @@ export async function getAvailabilitySummary(
 export function calculateNights(checkInDate: string, checkOutDate: string): number {
   const checkIn = new Date(checkInDate);
   const checkOut = new Date(checkOutDate);
-  const diffTime = Math.abs(checkOut.getTime() - checkIn.getTime());
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-  return diffDays;
+  
+  // Validate that dates are valid
+  if (Number.isNaN(checkIn.getTime()) || Number.isNaN(checkOut.getTime())) {
+    throw BadRequestError('Invalid check-in or check-out date');
+  }
+  
+  const diffTime = checkOut.getTime() - checkIn.getTime();
+  
+  // Ensure check-out is after check-in
+  if (diffTime <= 0) {
+    throw BadRequestError('Check-out date must be after check-in date');
+  }
+  
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
 /**
@@ -1276,7 +1288,7 @@ export async function calculateReservationPrice(params: {
   const dates: string[] = [];
   for (let i = 0; i < nights; i++) {
     const currentDate = new Date(checkIn);
-    currentDate.setDate(checkIn.getDate() + i);
+    currentDate.setUTCDate(currentDate.getUTCDate() + i);
     dates.push(currentDate.toISOString().split('T')[0]);
   }
 

@@ -237,8 +237,11 @@ export type Database = {
           check_in_date: string;
           check_out_date: string;
           room_type: string;
+          room_type_id: string | null;
           guest_count: number;
+          nights: number;
           total_price: number;
+          price_breakdown: any | null;
           status: 'confirmed' | 'cancelled' | 'completed';
           payment_status: 'pending' | 'paid' | 'refunded' | 'failed';
           admin_notes: string | null;
@@ -256,8 +259,11 @@ export type Database = {
           check_in_date: string;
           check_out_date: string;
           room_type: string;
+          room_type_id?: string | null;
           guest_count?: number;
+          nights: number;
           total_price: number;
+          price_breakdown?: any | null;
           status?: 'confirmed' | 'cancelled' | 'completed';
           payment_status?: 'pending' | 'paid' | 'refunded' | 'failed';
           admin_notes?: string | null;
@@ -275,8 +281,11 @@ export type Database = {
           check_in_date?: string;
           check_out_date?: string;
           room_type?: string;
+          room_type_id?: string | null;
           guest_count?: number;
+          nights?: number;
           total_price?: number;
+          price_breakdown?: any | null;
           status?: 'confirmed' | 'cancelled' | 'completed';
           payment_status?: 'pending' | 'paid' | 'refunded' | 'failed';
           admin_notes?: string | null;
