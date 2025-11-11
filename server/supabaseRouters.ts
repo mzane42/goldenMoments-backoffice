@@ -117,7 +117,7 @@ export const appRouter = router({
         }))
         .mutation(async ({ input, ctx }) => {
           const updates: any = {};
-          
+
           // Handle status update (including cancellation)
           if (input.status) {
             if (input.status === 'cancelled' && input.cancellationReason) {
@@ -129,23 +129,100 @@ export const appRouter = router({
               updates.status = input.status;
             }
           }
-          
+
           // Handle payment status update
           if (input.paymentStatus !== undefined) {
             updates.payment_status = input.paymentStatus;
           }
-          
+
           // Handle admin notes update
           if (input.adminNotes !== undefined) {
             updates.admin_notes = input.adminNotes;
           }
-          
+
           // Apply updates if any (skip if already cancelled above)
           if (Object.keys(updates).length > 0 && input.status !== 'cancelled') {
             await db.updateReservation(input.id as any, updates);
           }
-          
+
           return { success: true };
+        }),
+
+      // Batch operations
+      batchUpdateStatus: adminProcedure
+        .input(z.object({
+          ids: z.array(z.string()).max(20),
+          status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']).optional(),
+          paymentStatus: z.enum(['pending', 'paid', 'failed', 'refunded']).optional(),
+          cancellationReason: z.string().optional(),
+          adminNotes: z.string().optional(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          const results = await Promise.allSettled(
+            input.ids.map(async (id) => {
+              const updates: any = {};
+
+              // Handle status update (including cancellation)
+              if (input.status) {
+                if (input.status === 'cancelled' && input.cancellationReason) {
+                  await db.cancelReservation(id as any, input.cancellationReason, ctx.user.authId);
+                } else if (input.status === 'cancelled' && !input.cancellationReason) {
+                  throw new Error('Cancellation reason is required');
+                } else {
+                  updates.status = input.status;
+                }
+              }
+
+              // Handle payment status update
+              if (input.paymentStatus !== undefined) {
+                updates.payment_status = input.paymentStatus;
+              }
+
+              // Handle admin notes update
+              if (input.adminNotes !== undefined) {
+                updates.admin_notes = input.adminNotes;
+              }
+
+              // Apply updates if any (skip if already cancelled above)
+              if (Object.keys(updates).length > 0 && input.status !== 'cancelled') {
+                await db.updateReservation(id as any, updates);
+              }
+
+              return { id, success: true };
+            })
+          );
+
+          const success = results.filter(r => r.status === 'fulfilled').length;
+          const failed = results.filter(r => r.status === 'rejected').length;
+          const errors = results
+            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+            .map((r, idx) => ({
+              id: input.ids[idx],
+              message: r.reason?.message || 'Unknown error',
+            }));
+
+          return { success, failed, errors };
+        }),
+
+      batchDelete: adminProcedure
+        .input(z.object({
+          ids: z.array(z.string()).max(20),
+        }))
+        .mutation(async ({ input }) => {
+          const results = await Promise.allSettled(
+            input.ids.map(id => db.deleteReservation(id))
+          );
+
+          const success = results.filter(r => r.status === 'fulfilled').length;
+          const failed = results.filter(r => r.status === 'rejected').length;
+          const errors = results
+            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+            .map((r, idx) => ({
+              id: input.ids[idx],
+              message: r.reason?.message || 'Unknown error',
+            }));
+
+          return { success, failed, errors };
         }),
     }),
 
@@ -214,7 +291,71 @@ export const appRouter = router({
           await db.deleteExperience(input.id);
           return { success: true };
         }),
-      
+
+      // Batch operations
+      batchUpdateStatus: adminProcedure
+        .input(z.object({
+          ids: z.array(z.string()).max(20),
+          status: z.enum(['active', 'inactive']).optional(),
+          isFeatured: z.boolean().optional(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          const results = await Promise.allSettled(
+            input.ids.map(async (id) => {
+              const updates: any = {};
+
+              if (input.status !== undefined) {
+                updates.status = input.status;
+              }
+
+              if (input.isFeatured !== undefined) {
+                updates.is_featured = input.isFeatured;
+              }
+
+              if (Object.keys(updates).length > 0) {
+                await db.updateExperience(id, {
+                  ...updates,
+                  last_modified_by: ctx.user.authId,
+                });
+              }
+
+              return { id, success: true };
+            })
+          );
+
+          const success = results.filter(r => r.status === 'fulfilled').length;
+          const failed = results.filter(r => r.status === 'rejected').length;
+          const errors = results
+            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+            .map((r, idx) => ({
+              id: input.ids[idx],
+              message: r.reason?.message || 'Unknown error',
+            }));
+
+          return { success, failed, errors };
+        }),
+
+      batchDelete: adminProcedure
+        .input(z.object({
+          ids: z.array(z.string()).max(20),
+        }))
+        .mutation(async ({ input }) => {
+          const results = await Promise.allSettled(
+            input.ids.map(id => db.deleteExperience(id))
+          );
+
+          const success = results.filter(r => r.status === 'fulfilled').length;
+          const failed = results.filter(r => r.status === 'rejected').length;
+          const errors = results
+            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+            .map((r, idx) => ({
+              id: input.ids[idx],
+              message: r.reason?.message || 'Unknown error',
+            }));
+
+          return { success, failed, errors };
+        }),
+
       bulkDeactivateExpired: adminProcedure.mutation(async () => {
         await db.bulkDeactivateExpiredExperiences();
         return { success: true };
@@ -467,9 +608,93 @@ export const appRouter = router({
           if (!experience || experience.company !== ctx.partner.company) {
             throw new Error("Expérience non trouvée ou accès refusé");
           }
-          
+
           await db.deleteExperience(input.id);
           return { success: true };
+        }),
+
+      // Batch operations
+      batchUpdateStatus: hotelPartnerProcedure
+        .input(z.object({
+          ids: z.array(z.string()).max(20),
+          status: z.enum(['active', 'inactive']).optional(),
+          isFeatured: z.boolean().optional(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          // Verify all experiences belong to partner's company
+          await Promise.all(
+            input.ids.map(async (id) => {
+              const experience = await db.getExperienceById(id);
+              if (!experience || experience.company !== ctx.partner.company) {
+                throw new Error(`Expérience ${id} introuvable ou accès refusé`);
+              }
+            })
+          );
+
+          const results = await Promise.allSettled(
+            input.ids.map(async (id) => {
+              const updates: any = {};
+
+              if (input.status !== undefined) {
+                updates.status = input.status;
+              }
+
+              if (input.isFeatured !== undefined) {
+                updates.is_featured = input.isFeatured;
+              }
+
+              if (Object.keys(updates).length > 0) {
+                await db.updateExperience(id, {
+                  ...updates,
+                  last_modified_by: ctx.user.authId,
+                });
+              }
+
+              return { id, success: true };
+            })
+          );
+
+          const success = results.filter(r => r.status === 'fulfilled').length;
+          const failed = results.filter(r => r.status === 'rejected').length;
+          const errors = results
+            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+            .map((r, idx) => ({
+              id: input.ids[idx],
+              message: r.reason?.message || 'Unknown error',
+            }));
+
+          return { success, failed, errors };
+        }),
+
+      batchDelete: hotelPartnerProcedure
+        .input(z.object({
+          ids: z.array(z.string()).max(20),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          // Verify all experiences belong to partner's company
+          await Promise.all(
+            input.ids.map(async (id) => {
+              const experience = await db.getExperienceById(id);
+              if (!experience || experience.company !== ctx.partner.company) {
+                throw new Error(`Expérience ${id} introuvable ou accès refusé`);
+              }
+            })
+          );
+
+          const results = await Promise.allSettled(
+            input.ids.map(id => db.deleteExperience(id))
+          );
+
+          const success = results.filter(r => r.status === 'fulfilled').length;
+          const failed = results.filter(r => r.status === 'rejected').length;
+          const errors = results
+            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+            .map((r, idx) => ({
+              id: input.ids[idx],
+              message: r.reason?.message || 'Unknown error',
+            }));
+
+          return { success, failed, errors };
         }),
     }),
 
@@ -486,10 +711,115 @@ export const appRouter = router({
         .query(async ({ ctx, input }) => {
           return db.getReservationsByCompanyPaginated(ctx.partner.company, input);
         }),
-      
+
       stats: hotelPartnerProcedure
         .query(async ({ ctx }) => {
           return db.getPartnerReservationStats(ctx.partner.company);
+        }),
+
+      // Batch operations (same as admin, partners can manage their own reservations)
+      batchUpdateStatus: hotelPartnerProcedure
+        .input(z.object({
+          ids: z.array(z.string()).max(20),
+          status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']).optional(),
+          paymentStatus: z.enum(['pending', 'paid', 'failed', 'refunded']).optional(),
+          cancellationReason: z.string().optional(),
+          adminNotes: z.string().optional(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          // Verify all reservations belong to partner's company
+          const verifications = await Promise.all(
+            input.ids.map(async (id) => {
+              const reservation: any = await db.getReservationById(id as any);
+              if (!reservation) {
+                throw new Error(`Réservation ${id} introuvable`);
+              }
+              // Check if reservation's experience belongs to partner
+              const experienceId = reservation.experience_id || reservation.experienceId;
+              const experience = await db.getExperienceById(experienceId);
+              if (!experience || experience.company !== ctx.partner.company) {
+                throw new Error(`Accès refusé pour la réservation ${id}`);
+              }
+              return true;
+            })
+          );
+
+          const results = await Promise.allSettled(
+            input.ids.map(async (id) => {
+              const updates: any = {};
+
+              if (input.status) {
+                if (input.status === 'cancelled' && input.cancellationReason) {
+                  await db.cancelReservation(id as any, input.cancellationReason, ctx.user.authId);
+                } else if (input.status === 'cancelled' && !input.cancellationReason) {
+                  throw new Error('Cancellation reason is required');
+                } else {
+                  updates.status = input.status;
+                }
+              }
+
+              if (input.paymentStatus !== undefined) {
+                updates.payment_status = input.paymentStatus;
+              }
+
+              if (input.adminNotes !== undefined) {
+                updates.admin_notes = input.adminNotes;
+              }
+
+              if (Object.keys(updates).length > 0 && input.status !== 'cancelled') {
+                await db.updateReservation(id as any, updates);
+              }
+
+              return { id, success: true };
+            })
+          );
+
+          const success = results.filter(r => r.status === 'fulfilled').length;
+          const failed = results.filter(r => r.status === 'rejected').length;
+          const errors = results
+            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+            .map((r, idx) => ({
+              id: input.ids[idx],
+              message: r.reason?.message || 'Unknown error',
+            }));
+
+          return { success, failed, errors };
+        }),
+
+      batchDelete: hotelPartnerProcedure
+        .input(z.object({
+          ids: z.array(z.string()).max(20),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          // Verify all reservations belong to partner's company
+          await Promise.all(
+            input.ids.map(async (id) => {
+              const reservation: any = await db.getReservationById(id as any);
+              if (!reservation) {
+                throw new Error(`Réservation ${id} introuvable`);
+              }
+              const experienceId = reservation.experience_id || reservation.experienceId;
+              const experience = await db.getExperienceById(experienceId);
+              if (!experience || experience.company !== ctx.partner.company) {
+                throw new Error(`Accès refusé pour la réservation ${id}`);
+              }
+            })
+          );
+
+          const results = await Promise.allSettled(
+            input.ids.map(id => db.deleteReservation(id))
+          );
+
+          const success = results.filter(r => r.status === 'fulfilled').length;
+          const failed = results.filter(r => r.status === 'rejected').length;
+          const errors = results
+            .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+            .map((r, idx) => ({
+              id: input.ids[idx],
+              message: r.reason?.message || 'Unknown error',
+            }));
+
+          return { success, failed, errors };
         }),
     }),
 

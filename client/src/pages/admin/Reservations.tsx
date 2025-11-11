@@ -16,9 +16,22 @@ import { ReservationStats } from '@/components/reservations/ReservationStats';
 import { Button } from '@/components/ui/button';
 import { useTableState } from '@/hooks/useTableState';
 import { trpc } from '@/lib/trpc';
-import { Plus, Calendar, Download, Users, FileEdit, GitBranch, CheckCircle, XCircle, Settings } from 'lucide-react';
+import { Plus, Calendar, Download, Users, FileEdit, GitBranch, CheckCircle, XCircle, Settings, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ReservationWithRelations, ReservationStatus } from '@/../../shared/types/entities';
+import { DataTableBatchActions, type BatchAction } from '@/components/data-table/DataTableBatchActions';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import {
   formatCurrency,
   formatDate,
@@ -47,6 +60,14 @@ export default function AdminReservations() {
   // Manage reservation dialog state (comprehensive)
   const [manageDialogOpen, setManageDialogOpen] = React.useState(false);
   const [manageDialogReservation, setManageDialogReservation] = React.useState<ReservationWithRelations | null>(null);
+
+  // Batch selection state
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+
+  // Batch action dialogs
+  const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = React.useState(false);
+  const [batchCancelDialogOpen, setBatchCancelDialogOpen] = React.useState(false);
+  const [cancellationReason, setCancellationReason] = React.useState('');
 
   // Fetch reservations
   const { data, isLoading, error, refetch } = trpc.admin.reservations.list.useQuery({
@@ -78,6 +99,40 @@ export default function AdminReservations() {
     onSuccess: () => {
       setManageDialogOpen(false);
       setManageDialogReservation(null);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+
+  // Batch mutations
+  const batchUpdateStatusMutation = trpc.admin.reservations.batchUpdateStatus.useMutation({
+    onSuccess: (result) => {
+      if (result.failed === 0) {
+        toast.success(`${result.success} réservation(s) mise(s) à jour avec succès`);
+      } else {
+        toast.warning(`${result.success} réussie(s), ${result.failed} échouée(s)`);
+      }
+      setSelectedIds([]);
+      setBatchCancelDialogOpen(false);
+      setCancellationReason('');
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+
+  const batchDeleteMutation = trpc.admin.reservations.batchDelete.useMutation({
+    onSuccess: (result) => {
+      if (result.failed === 0) {
+        toast.success(`${result.success} réservation(s) supprimée(s) avec succès`);
+      } else {
+        toast.warning(`${result.success} supprimée(s), ${result.failed} échouée(s)`);
+      }
+      setSelectedIds([]);
+      setBatchDeleteDialogOpen(false);
       refetch();
     },
     onError: (error) => {
@@ -159,11 +214,97 @@ export default function AdminReservations() {
     setManageDialogOpen(true);
   };
 
+  // Batch action handlers
+  const handleBatchConfirm = async () => {
+    await batchUpdateStatusMutation.mutateAsync({
+      ids: selectedIds,
+      status: 'confirmed',
+      paymentStatus: 'paid',
+    });
+  };
+
+  const handleBatchComplete = async () => {
+    await batchUpdateStatusMutation.mutateAsync({
+      ids: selectedIds,
+      status: 'completed',
+    });
+  };
+
+  const handleBatchCancel = () => {
+    setBatchCancelDialogOpen(true);
+  };
+
+  const handleConfirmBatchCancel = async () => {
+    if (!cancellationReason.trim()) {
+      toast.error('Veuillez fournir une raison d\'annulation');
+      return;
+    }
+    await batchUpdateStatusMutation.mutateAsync({
+      ids: selectedIds,
+      status: 'cancelled',
+      cancellationReason,
+    });
+  };
+
+  const handleBatchUpdatePayment = async (paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded') => {
+    await batchUpdateStatusMutation.mutateAsync({
+      ids: selectedIds,
+      paymentStatus,
+    });
+  };
+
+  const handleBatchDelete = () => {
+    setBatchDeleteDialogOpen(true);
+  };
+
+  const confirmBatchDelete = async () => {
+    await batchDeleteMutation.mutateAsync({ ids: selectedIds });
+  };
+
   const handleExportCSV = () => {
     if (data?.data) {
       exportReservationsToCSV(data.data);
       toast.success('Export CSV réussi');
     }
+  };
+
+  // Prepare batch actions
+  const renderBatchActions = (selectedCount: number) => {
+    const actions: BatchAction[] = [
+      {
+        label: 'Confirmer',
+        icon: <CheckCircle className="mr-1 h-4 w-4" />,
+        onClick: handleBatchConfirm,
+        variant: 'default',
+      },
+      {
+        label: 'Terminer',
+        icon: <CheckCircle className="mr-1 h-4 w-4" />,
+        onClick: handleBatchComplete,
+        variant: 'secondary',
+      },
+      {
+        label: 'Annuler',
+        icon: <XCircle className="mr-1 h-4 w-4" />,
+        onClick: handleBatchCancel,
+        variant: 'outline',
+      },
+      {
+        label: 'Supprimer',
+        icon: <Trash2 className="mr-1 h-4 w-4" />,
+        onClick: handleBatchDelete,
+        variant: 'destructive',
+      },
+    ];
+
+    return (
+      <DataTableBatchActions
+        selectedCount={selectedCount}
+        maxSelection={20}
+        actions={actions}
+        onClearSelection={() => setSelectedIds([])}
+      />
+    );
   };
 
   // Prepare view details sections
@@ -285,6 +426,11 @@ export default function AdminReservations() {
           searchPlaceholder="Rechercher par référence, client, expérience..."
           sortConfig={tableState.sortConfig}
           onSortChange={tableState.setSortConfig}
+          enableRowSelection={true}
+          selectedRows={selectedIds}
+          onSelectionChange={setSelectedIds}
+          maxSelection={20}
+          renderBatchActions={renderBatchActions}
           renderRowActions={(row) => {
             const isPending = row.status === 'pending';
             const isConfirmed = row.status === 'confirmed';
@@ -379,6 +525,60 @@ export default function AdminReservations() {
           itemName={deletingReservation?.bookingReference}
           loading={deleteMutation.isPending}
         />
+
+        {/* Batch Delete Dialog */}
+        <AlertDialog open={batchDeleteDialogOpen} onOpenChange={setBatchDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Supprimer {selectedIds.length} réservation(s) ?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Cette action est irréversible. Les réservations seront définitivement supprimées de la base de données.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmBatchDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={batchDeleteMutation.isPending}
+              >
+                {batchDeleteMutation.isPending ? 'Suppression...' : 'Supprimer'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Batch Cancel Dialog */}
+        <AlertDialog open={batchCancelDialogOpen} onOpenChange={setBatchCancelDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Annuler {selectedIds.length} réservation(s) ?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Veuillez fournir une raison pour l'annulation de ces réservations.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4">
+              <Label htmlFor="cancellation-reason">Raison de l'annulation</Label>
+              <Textarea
+                id="cancellation-reason"
+                value={cancellationReason}
+                onChange={(e) => setCancellationReason(e.target.value)}
+                placeholder="Ex: Demande du client, force majeure, etc."
+                className="mt-2"
+                rows={3}
+              />
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setCancellationReason('')}>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmBatchCancel}
+                disabled={batchUpdateStatusMutation.isPending || !cancellationReason.trim()}
+              >
+                {batchUpdateStatusMutation.isPending ? 'Annulation...' : 'Confirmer l\'annulation'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </AdminLayout>
   );

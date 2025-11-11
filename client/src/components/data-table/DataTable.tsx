@@ -1,9 +1,7 @@
 /**
  * Generic DataTable component
- * Supports sorting, searching, and pagination
+ * Supports sorting, searching, pagination, and batch selection
  * Designed to be reusable across different entities
- * 
- * TODO Phase 2: Add row selection, bulk actions, advanced filters
  */
 
 import * as React from 'react';
@@ -18,15 +16,18 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { DataTablePagination } from './DataTablePagination';
 import { DataTableToolbar } from './DataTableToolbar';
+import { createSelectionColumn } from './columns/selection-column';
 import type { SortConfig } from '@/../../shared/types/entities';
+import { cn } from '@/lib/utils';
 
 export interface DataTableColumn<TData> {
   id: string;
-  header: string;
+  header: string | React.ReactNode;
   accessorKey?: keyof TData;
   cell?: (row: TData) => React.ReactNode;
   enableSorting?: boolean;
   enableSearch?: boolean;
+  size?: number;
 }
 
 interface DataTableProps<TData> {
@@ -49,6 +50,12 @@ interface DataTableProps<TData> {
   onSortChange: (config: SortConfig | null) => void;
   // Row actions
   renderRowActions?: (row: TData) => React.ReactNode;
+  // Row selection
+  enableRowSelection?: boolean;
+  selectedRows?: string[];
+  onSelectionChange?: (ids: string[]) => void;
+  maxSelection?: number;
+  renderBatchActions?: (selectedCount: number) => React.ReactNode;
   // Empty state
   emptyStateTitle?: string;
   emptyStateDescription?: string;
@@ -71,6 +78,11 @@ export function DataTable<TData extends { id: string }>({
   sortConfig,
   onSortChange,
   renderRowActions,
+  enableRowSelection = false,
+  selectedRows = [],
+  onSelectionChange = () => {},
+  maxSelection = 20,
+  renderBatchActions,
   emptyStateTitle = 'Aucune donnée',
   emptyStateDescription = 'Aucun élément à afficher pour le moment.',
   emptyStateIcon,
@@ -78,6 +90,10 @@ export function DataTable<TData extends { id: string }>({
   // Normalize pageSize to prevent division by zero
   const normalizedPageSize = Math.max(1, Number(pageSize) || 1);
   const totalPages = total > 0 ? Math.ceil(total / normalizedPageSize) : 0;
+
+  // Create selection column if needed
+  const selectionColumn = enableRowSelection ? createSelectionColumn<TData>() : null;
+  const allColumns = selectionColumn ? [selectionColumn, ...columns] : columns;
 
   // Loading skeleton
   if (loading && data.length === 0) {
@@ -87,13 +103,16 @@ export function DataTable<TData extends { id: string }>({
           searchValue={searchValue}
           onSearchChange={onSearchChange}
           searchPlaceholder={searchPlaceholder}
+          batchActions={renderBatchActions && selectedRows.length > 0 ? renderBatchActions(selectedRows.length) : null}
         />
         <div className="rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
-                {columns.map((column) => (
-                  <TableHead key={column.id}>{column.header}</TableHead>
+                {allColumns.map((column) => (
+                  <TableHead key={column.id} style={column.size ? { width: column.size } : undefined}>
+                    {typeof column.header === 'string' ? column.header : column.header}
+                  </TableHead>
                 ))}
                 {renderRowActions && <TableHead className="w-[80px]">Actions</TableHead>}
               </TableRow>
@@ -101,7 +120,7 @@ export function DataTable<TData extends { id: string }>({
             <TableBody>
               {Array.from({ length: normalizedPageSize }).map((_, index) => (
                 <TableRow key={index}>
-                  {columns.map((column) => (
+                  {allColumns.map((column) => (
                     <TableCell key={column.id}>
                       <Skeleton className="h-6 w-full" />
                     </TableCell>
@@ -128,6 +147,7 @@ export function DataTable<TData extends { id: string }>({
           searchValue={searchValue}
           onSearchChange={onSearchChange}
           searchPlaceholder={searchPlaceholder}
+          batchActions={renderBatchActions && selectedRows.length > 0 ? renderBatchActions(selectedRows.length) : null}
         />
         <div className="rounded-md border border-destructive/50 bg-destructive/10 p-8 text-center">
           <p className="text-sm text-destructive">{error}</p>
@@ -144,6 +164,7 @@ export function DataTable<TData extends { id: string }>({
           searchValue={searchValue}
           onSearchChange={onSearchChange}
           searchPlaceholder={searchPlaceholder}
+          batchActions={renderBatchActions && selectedRows.length > 0 ? renderBatchActions(selectedRows.length) : null}
         />
         <div className="rounded-md border">
           <div className="flex flex-col items-center justify-center py-16 px-4">
@@ -168,15 +189,25 @@ export function DataTable<TData extends { id: string }>({
         searchValue={searchValue}
         onSearchChange={onSearchChange}
         searchPlaceholder={searchPlaceholder}
+        batchActions={renderBatchActions && selectedRows.length > 0 ? renderBatchActions(selectedRows.length) : null}
       />
 
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
-              {columns.map((column) => (
-                <TableHead key={column.id}>
-                  {column.enableSorting ? (
+              {allColumns.map((column) => (
+                <TableHead key={column.id} style={column.size ? { width: column.size } : undefined}>
+                  {/* Render selection header */}
+                  {column.id === 'select' && selectionColumn ? (
+                    selectionColumn.header({
+                      data,
+                      selectedIds: selectedRows,
+                      onSelectionChange,
+                      maxSelection,
+                    })
+                  ) : /* Render sortable header */
+                  column.enableSorting && 'accessorKey' in column ? (
                     <button
                       className="flex items-center gap-2 hover:text-foreground"
                       onClick={() => {
@@ -208,22 +239,38 @@ export function DataTable<TData extends { id: string }>({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((row) => (
-              <TableRow key={row.id}>
-                {columns.map((column) => (
-                  <TableCell key={column.id}>
-                    {column.cell
-                      ? column.cell(row)
-                      : column.accessorKey
-                      ? String(row[column.accessorKey] ?? '-')
-                      : '-'}
-                  </TableCell>
-                ))}
-                {renderRowActions && (
-                  <TableCell>{renderRowActions(row)}</TableCell>
-                )}
-              </TableRow>
-            ))}
+            {data.map((row) => {
+              const isSelected = selectedRows.includes(row.id);
+              return (
+                <TableRow
+                  key={row.id}
+                  className={cn(isSelected && 'bg-muted/50')}
+                >
+                  {allColumns.map((column) => (
+                    <TableCell key={column.id}>
+                      {/* Render selection cell */}
+                      {column.id === 'select' && selectionColumn ? (
+                        selectionColumn.cell({
+                          row,
+                          selectedIds: selectedRows,
+                          onSelectionChange,
+                          maxSelection,
+                        })
+                      ) : column.cell ? (
+                        column.cell(row)
+                      ) : 'accessorKey' in column && column.accessorKey ? (
+                        String(row[column.accessorKey] ?? '-')
+                      ) : (
+                        '-'
+                      )}
+                    </TableCell>
+                  ))}
+                  {renderRowActions && (
+                    <TableCell>{renderRowActions(row)}</TableCell>
+                  )}
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>

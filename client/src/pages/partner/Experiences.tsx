@@ -15,9 +15,20 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useTableState } from '@/hooks/useTableState';
 import { trpc } from '@/lib/trpc';
-import { Plus, ShoppingBag, Star, Calendar as CalendarIcon, Bed } from 'lucide-react';
+import { Plus, ShoppingBag, Star, Calendar as CalendarIcon, Bed, Power, PowerOff, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { ExperienceWithRelations } from '@/../../shared/types/entities';
+import { DataTableBatchActions, type BatchAction } from '@/components/data-table/DataTableBatchActions';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import type { CreateExperienceInput } from '@/../../shared/schemas/experience';
 import { CalendarManagementDialog } from '@/components/calendar/CalendarManagementDialog';
 import { ManageRoomTypesDialog } from '@/components/dialogs/ManageRoomTypesDialog';
@@ -53,6 +64,12 @@ export default function PartnerExperiences() {
   // Room types dialog state
   const [roomTypesDialogOpen, setRoomTypesDialogOpen] = React.useState(false);
   const [roomTypesExperience, setRoomTypesExperience] = React.useState<ExperienceWithRelations | null>(null);
+
+  // Batch selection state
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+
+  // Batch action dialog
+  const [batchDeleteDialogOpen, setBatchDeleteDialogOpen] = React.useState(false);
 
   // Fetch partner's experiences
   const { data, isLoading, error, refetch } = trpc.partner.experiences.list.useQuery({
@@ -103,6 +120,38 @@ export default function PartnerExperiences() {
     },
   });
 
+  // Batch mutations
+  const batchUpdateStatusMutation = trpc.partner.experiences.batchUpdateStatus.useMutation({
+    onSuccess: (result) => {
+      if (result.failed === 0) {
+        toast.success(`${result.success} expérience(s) mise(s) à jour avec succès`);
+      } else {
+        toast.warning(`${result.success} réussie(s), ${result.failed} échouée(s)`);
+      }
+      setSelectedIds([]);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+
+  const batchDeleteMutation = trpc.partner.experiences.batchDelete.useMutation({
+    onSuccess: (result) => {
+      if (result.failed === 0) {
+        toast.success(`${result.success} expérience(s) supprimée(s) avec succès`);
+      } else {
+        toast.warning(`${result.success} supprimée(s), ${result.failed} échouée(s)`);
+      }
+      setSelectedIds([]);
+      setBatchDeleteDialogOpen(false);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(`Erreur: ${error.message}`);
+    },
+  });
+
   const handleView = (experience: ExperienceWithRelations) => {
     setSelectedExperience(experience);
     setViewDialogOpen(true);
@@ -144,10 +193,79 @@ export default function PartnerExperiences() {
 
   const handleUpdate = async (data: CreateExperienceInput & { id?: string }) => {
     if (!data.id) return;
-    await updateMutation.mutateAsync({ 
-      id: data.id, 
-      updates: data 
+    await updateMutation.mutateAsync({
+      id: data.id,
+      updates: data
     });
+  };
+
+  // Batch action handlers
+  const handleBatchActivate = async () => {
+    await batchUpdateStatusMutation.mutateAsync({
+      ids: selectedIds,
+      status: 'active',
+    });
+  };
+
+  const handleBatchDeactivate = async () => {
+    await batchUpdateStatusMutation.mutateAsync({
+      ids: selectedIds,
+      status: 'inactive',
+    });
+  };
+
+  const handleBatchToggleFeatured = async (featured: boolean) => {
+    await batchUpdateStatusMutation.mutateAsync({
+      ids: selectedIds,
+      isFeatured: featured,
+    });
+  };
+
+  const handleBatchDelete = () => {
+    setBatchDeleteDialogOpen(true);
+  };
+
+  const confirmBatchDelete = async () => {
+    await batchDeleteMutation.mutateAsync({ ids: selectedIds });
+  };
+
+  // Prepare batch actions
+  const renderBatchActions = (selectedCount: number) => {
+    const actions: BatchAction[] = [
+      {
+        label: 'Activer',
+        icon: <Power className="mr-1 h-4 w-4" />,
+        onClick: handleBatchActivate,
+        variant: 'default',
+      },
+      {
+        label: 'Désactiver',
+        icon: <PowerOff className="mr-1 h-4 w-4" />,
+        onClick: handleBatchDeactivate,
+        variant: 'secondary',
+      },
+      {
+        label: 'Mettre en avant',
+        icon: <Star className="mr-1 h-4 w-4" />,
+        onClick: () => handleBatchToggleFeatured(true),
+        variant: 'outline',
+      },
+      {
+        label: 'Supprimer',
+        icon: <Trash2 className="mr-1 h-4 w-4" />,
+        onClick: handleBatchDelete,
+        variant: 'destructive',
+      },
+    ];
+
+    return (
+      <DataTableBatchActions
+        selectedCount={selectedCount}
+        maxSelection={20}
+        actions={actions}
+        onClearSelection={() => setSelectedIds([])}
+      />
+    );
   };
 
   // Prepare view details sections
@@ -242,6 +360,11 @@ export default function PartnerExperiences() {
           searchPlaceholder="Rechercher par titre, catégorie..."
           sortConfig={tableState.sortConfig}
           onSortChange={tableState.setSortConfig}
+          enableRowSelection={true}
+          selectedRows={selectedIds}
+          onSelectionChange={setSelectedIds}
+          maxSelection={20}
+          renderBatchActions={renderBatchActions}
           renderRowActions={(row) => (
             <DataTableRowActions
               onView={() => handleView(row)}
@@ -327,6 +450,28 @@ export default function PartnerExperiences() {
             onOpenChange={setRoomTypesDialogOpen}
           />
         )}
+
+        {/* Batch Delete Dialog */}
+        <AlertDialog open={batchDeleteDialogOpen} onOpenChange={setBatchDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Supprimer {selectedIds.length} expérience(s) ?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Cette action est irréversible. Les expériences seront définitivement supprimées de la base de données.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmBatchDelete}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={batchDeleteMutation.isPending}
+              >
+                {batchDeleteMutation.isPending ? 'Suppression...' : 'Supprimer'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </PartnerLayout>
   );

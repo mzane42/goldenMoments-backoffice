@@ -318,3 +318,33 @@ export interface FilterConfig {
   value: any;
 }
 
+// Batch operation types
+export interface BatchDeleteInput {
+  ids: UUID[];
+}
+
+export interface BatchUpdateReservationStatusInput {
+  ids: UUID[];
+  status?: ReservationStatus;
+  paymentStatus?: ReservationPaymentStatus;
+  cancellationReason?: string;
+  adminNotes?: string;
+}
+
+export interface BatchUpdateExperienceInput {
+  ids: UUID[];
+  updates: {
+    status?: ExperienceStatus;
+    isFeatured?: boolean;
+  };
+}
+
+export interface BatchOperationResult {
+  success: number;
+  failed: number;
+  errors?: Array<{
+    id: UUID;
+    message: string;
+  }>;
+}
+
