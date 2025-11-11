@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Mail } from "lucide-react";
-import { APP_LOGO, APP_TITLE } from "@/supabaseConst";
+import { APP_LOGO, APP_TITLE, getRedirectUrl } from "@/supabaseConst";
 
 export default function Login() {
   const { signIn, signOut } = useSupabaseAuth();
@@ -42,7 +42,14 @@ export default function Login() {
     setSuccess("");
 
     try {
-      const { error } = await supabase.auth.signInWithOtp({ email });
+      const redirectUrl = getRedirectUrl();
+      
+      const { error } = await supabase.auth.signInWithOtp({ 
+        email,
+        options: {
+          emailRedirectTo: `${redirectUrl}/`,
+        },
+      });
       if (error) {
         setError(error.message);
       } else {

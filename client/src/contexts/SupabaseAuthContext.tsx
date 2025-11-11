@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { getRedirectUrl } from '@/supabaseConst';
 
 interface SupabaseAuthContextType {
   user: User | null;
@@ -48,9 +49,14 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
   };
 
   const signUp = async (email: string, password: string) => {
+    const redirectUrl = getRedirectUrl();
+    
     const { error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: `${redirectUrl}/`,
+      },
     });
     if (error) throw error;
   };
@@ -61,10 +67,12 @@ export function SupabaseAuthProvider({ children }: { children: React.ReactNode }
   };
 
   const signInWithOAuth = async (provider: 'google' | 'github') => {
+    const redirectUrl = getRedirectUrl();
+    
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: window.location.origin,
+        redirectTo: `${redirectUrl}/`,
       },
     });
     if (error) throw error;
