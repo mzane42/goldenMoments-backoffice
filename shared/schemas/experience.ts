@@ -14,7 +14,7 @@ export const locationSchema = z.object({
 
 // Items/Amenities schema
 export const itemsSchema = z.object({
-  amenities: z.array(z.string()).default([]),
+  amenities: z.array(z.string()),
 });
 
 // Check-in info schema
@@ -34,16 +34,16 @@ export const transportationSchema = z.object({
 
 // Accessibility schema
 export const accessibilitySchema = z.object({
-  elevator: z.boolean().default(false),
-  accessible_rooms: z.boolean().default(false),
-  wheelchair_accessible: z.boolean().default(false),
+  elevator: z.boolean(),
+  accessible_rooms: z.boolean(),
+  wheelchair_accessible: z.boolean(),
 });
 
 // Additional info schema
 export const additionalInfoSchema = z.object({
-  pets_allowed: z.boolean().default(false),
+  pets_allowed: z.boolean(),
   smoking_policy: z.string().optional(),
-  languages_spoken: z.array(z.string()).default([]),
+  languages_spoken: z.array(z.string()),
 });
 
 // Schedules schema
@@ -73,7 +73,7 @@ export const createExperienceSchema = z.object({
   date_start: z.string().optional(),
   date_end: z.string().optional(),
   company: z.string().optional(),
-  status: z.enum(['active', 'inactive']).default('active'),
+  status: z.enum(['active', 'inactive']),
   partner_id: z.string().uuid().optional().nullable(),
 });
 

@@ -195,7 +195,7 @@ export function DataTable<TData extends { id: string }>({
                       {column.header}
                       {sortConfig?.column === column.accessorKey && (
                         <span className="text-xs">
-                          {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                          {sortConfig?.direction === 'asc' ? '↑' : '↓'}
                         </span>
                       )}
                     </button>
