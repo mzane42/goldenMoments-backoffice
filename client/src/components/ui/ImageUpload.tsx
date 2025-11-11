@@ -224,11 +224,14 @@ export function ImageUpload({
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
                   transition={{ duration: 0.2 }}
+                  drag={false}
                   draggable={!disabled}
-                  onDragStart={(e) => handleDragStart(e, index)}
-                  onDragOver={(e) => handleDragOverImage(e, index)}
-                  onDragLeave={handleDragLeaveImage}
-                  onDrop={(e) => handleDropImage(e, index)}
+                  {...({
+                    onDragStart: (e: React.DragEvent<HTMLDivElement>) => handleDragStart(e, index),
+                    onDragOver: (e: React.DragEvent<HTMLDivElement>) => handleDragOverImage(e, index),
+                    onDragLeave: handleDragLeaveImage,
+                    onDrop: (e: React.DragEvent<HTMLDivElement>) => handleDropImage(e, index),
+                  } as any)}
                   className={cn(
                     'relative aspect-square rounded-lg border-2 overflow-hidden group cursor-move',
                     'hover:border-primary transition-all',

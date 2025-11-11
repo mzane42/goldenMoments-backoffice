@@ -124,11 +124,13 @@ export function CreateExperienceDialog({
       },
       extras: [],
       allowed_nights: [1, 2, 3], // Default: flexible booking (1-3 nights)
+      payment_methods: ['pay_at_hotel'], // Default payment method
       date_start: '',
       date_end: '',
       company: '',
       status: isPartner ? 'inactive' : 'active',
       partner_id: undefined,
+      is_featured: false,
     },
   });
 
@@ -136,6 +138,7 @@ export function CreateExperienceDialog({
   const amenities = watch('items.amenities') || [];
   const languages = watch('additional_info.languages_spoken') || [];
   const extras = watch('extras') || [];
+  const paymentMethods = watch('payment_methods') || ['pay_at_hotel'];
   const longDescription = watch('long_description') || '';
   const title = watch('title') || '';
 
@@ -230,11 +233,13 @@ export function CreateExperienceDialog({
         { breakfast: '', dinner: '', pool: '', fitness_center: '' },
       extras: initialData.extras ?? [],
       allowed_nights: initialData.allowed_nights ?? initialData.allowedNights ?? [1, 2, 3],
+      payment_methods: initialData.payment_methods ?? initialData.paymentMethods ?? ['pay_at_hotel'],
       date_start: initialData.date_start ?? initialData.dateStart ?? '',
       date_end: initialData.date_end ?? initialData.dateEnd ?? '',
       company: initialData.company ?? '',
       status: initialData.status ?? (isPartner ? 'inactive' : 'active'),
       partner_id: currentPartnerId ?? undefined,
+      is_featured: initialData.is_featured ?? initialData.isFeatured ?? false,
     });
   }, [currentPartnerId, initialData, isEditMode, isPartner, reset]);
 
@@ -576,6 +581,31 @@ export function CreateExperienceDialog({
                   </div>
                 </div>
 
+                {!isPartner && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label htmlFor="is_featured">Expérience mise en avant</Label>
+                        <p className="text-sm text-muted-foreground">
+                          Afficher cette expérience dans la section "La Golden Family"
+                        </p>
+                      </div>
+                      <Controller
+                        name="is_featured"
+                        control={control}
+                        render={({ field }) => (
+                          <Switch
+                            id="is_featured"
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                            disabled={isReadOnly}
+                          />
+                        )}
+                      />
+                    </div>
+                  </div>
+                )}
+
                 <Separator />
 
                 {/* Allowed Nights */}
@@ -623,6 +653,93 @@ export function CreateExperienceDialog({
                     Au moins une durée doit être sélectionnée. Les clients ne pourront réserver que les durées autorisées.
                   </p>
                 </div>
+
+                <Separator />
+
+                {/* Payment Methods */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Méthodes de paiement disponibles *</Label>
+                    <p className="text-sm text-muted-foreground">
+                      Sélectionnez les méthodes de paiement acceptées pour cette expérience
+                    </p>
+                  </div>
+                  <Controller
+                    name="payment_methods"
+                    control={control}
+                    render={({ field }) => {
+                      const selectedMethods = field.value || ['pay_at_hotel'];
+                      const toggleMethod = (method: 'pay_at_hotel' | 'card' | 'apple_pay' | 'dahbia' | 'bank_transfer') => {
+                        if (selectedMethods.includes(method)) {
+                          const newValue = selectedMethods.filter((m) => m !== method);
+                          // Ensure at least one method is selected
+                          if (newValue.length > 0) {
+                            field.onChange(newValue);
+                          }
+                        } else {
+                          field.onChange([...selectedMethods, method]);
+                        }
+                      };
+
+                      const paymentMethodOptions: Array<{
+                        value: 'pay_at_hotel' | 'card' | 'apple_pay' | 'dahbia' | 'bank_transfer';
+                        label: string;
+                        icon: string;
+                      }> = [
+                        { value: 'pay_at_hotel', label: 'Paiement à l\'hôtel', icon: '🏨' },
+                        { value: 'card', label: 'Carte bancaire', icon: '💳' },
+                        { value: 'apple_pay', label: 'Apple Pay', icon: '🍎' },
+                        { value: 'dahbia', label: 'Dahbia', icon: '💳' },
+                        { value: 'bank_transfer', label: 'Virement CCP Golden Moments', icon: '🏦' },
+                      ];
+
+                      return (
+                        <div className="space-y-3">
+                          {paymentMethodOptions.map((option) => (
+                            <div
+                              key={option.value}
+                              className="flex items-center justify-between p-3 rounded-lg border bg-muted/20 cursor-pointer hover:bg-muted/40 transition-colors"
+                              onClick={() => !isReadOnly && toggleMethod(option.value)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="text-2xl">{option.icon}</span>
+                                <Label className="cursor-pointer font-normal">
+                                  {option.label}
+                                </Label>
+                              </div>
+                              <div
+                                className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                                  selectedMethods.includes(option.value)
+                                    ? 'bg-primary border-primary'
+                                    : 'border-muted-foreground/30'
+                                }`}
+                              >
+                                {selectedMethods.includes(option.value) && (
+                                  <svg
+                                    className="w-3 h-3 text-primary-foreground"
+                                    fill="none"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="3"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Au moins une méthode de paiement doit être sélectionnée. Les clients ne pourront utiliser que les méthodes autorisées.
+                  </p>
+                </div>
+
+                <Separator />
 
                 {/* Dates */}
                 <div className="grid grid-cols-2 gap-4">

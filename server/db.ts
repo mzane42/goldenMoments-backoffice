@@ -461,7 +461,8 @@ export async function getAllReservations() {
     .select(`
       *,
       experience:experiences(*),
-      user:users(*)
+      user:users(*),
+      roomTypeDetails:room_types(*)
     `)
     .order('created_at', { ascending: false });
 
@@ -483,7 +484,8 @@ export async function getReservationsPaginated(params: PaginationParams): Promis
     .select(`
       *,
       experience:experiences(*),
-      user:users(*)
+      user:users(*),
+      roomTypeDetails:room_types(*)
     `, { count: 'exact' });
 
   // Apply search filter
@@ -519,7 +521,8 @@ export async function getReservationsByCompany(company: string) {
     .select(`
       *,
       experience:experiences!inner(*),
-      user:users(*)
+      user:users(*),
+      roomTypeDetails:room_types(*)
     `)
     .eq('experience.company', company)
     .order('created_at', { ascending: false });
@@ -545,7 +548,8 @@ export async function getReservationsByCompanyPaginated(
     .select(`
       *,
       experience:experiences!inner(*),
-      user:users(*)
+      user:users(*),
+      roomTypeDetails:room_types(*)
     `, { count: 'exact' })
     .eq('experience.company', company);
 
@@ -710,11 +714,119 @@ export async function getReservationStats() {
     ? ((cancelledCount || 0) / totalReservations * 100).toFixed(2)
     : "0.00";
 
+  // Total revenue
+  const { data: allReservations } = await supabaseAdmin
+    .from('reservations')
+    .select('total_price')
+    .neq('status', 'cancelled');
+
+  const totalRevenue = allReservations?.reduce((sum, r) => sum + (r.total_price || 0), 0) || 0;
+
+  // Pending payments count
+  const { count: pendingPaymentsCount } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .eq('payment_status', 'pending')
+    .neq('status', 'cancelled');
+
+  // Confirmed reservations count
+  const { count: confirmedCount } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'confirmed');
+
+  // Upcoming check-ins (next 7 days)
+  const now = new Date();
+  const next7Days = new Date();
+  next7Days.setDate(next7Days.getDate() + 7);
+
+  const { count: upcomingCheckInsCount } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .gte('check_in_date', now.toISOString())
+    .lte('check_in_date', next7Days.toISOString())
+    .neq('status', 'cancelled');
+
   return {
     totalReservations: totalReservations || 0,
     monthlyGMV,
     cancelledCount: cancelledCount || 0,
-    cancellationRate
+    cancellationRate,
+    totalRevenue,
+    pendingPaymentsCount: pendingPaymentsCount || 0,
+    confirmedCount: confirmedCount || 0,
+    upcomingCheckInsCount: upcomingCheckInsCount || 0,
+  };
+}
+
+export async function getPartnerReservationStats(company: string) {
+  // Get experience IDs for this company
+  const { data: experiences } = await supabaseAdmin
+    .from('experiences')
+    .select('id')
+    .eq('company', company);
+
+  const experienceIds = experiences?.map(e => e.id) || [];
+
+  if (experienceIds.length === 0) {
+    return {
+      totalReservations: 0,
+      totalRevenue: 0,
+      pendingPaymentsCount: 0,
+      confirmedCount: 0,
+      upcomingCheckInsCount: 0,
+    };
+  }
+
+  // Total reservations for partner
+  const { count: totalReservations } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .in('experience_id', experienceIds);
+
+  // Total revenue
+  const { data: allReservations } = await supabaseAdmin
+    .from('reservations')
+    .select('total_price')
+    .in('experience_id', experienceIds)
+    .neq('status', 'cancelled');
+
+  const totalRevenue = allReservations?.reduce((sum, r) => sum + (r.total_price || 0), 0) || 0;
+
+  // Pending payments count
+  const { count: pendingPaymentsCount } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .in('experience_id', experienceIds)
+    .eq('payment_status', 'pending')
+    .neq('status', 'cancelled');
+
+  // Confirmed reservations count
+  const { count: confirmedCount } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .in('experience_id', experienceIds)
+    .eq('status', 'confirmed');
+
+  // Upcoming check-ins (next 7 days)
+  const now = new Date();
+  const next7Days = new Date();
+  next7Days.setDate(next7Days.getDate() + 7);
+
+  const { count: upcomingCheckInsCount } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .in('experience_id', experienceIds)
+    .gte('check_in_date', now.toISOString())
+    .lte('check_in_date', next7Days.toISOString())
+    .neq('status', 'cancelled');
+
+  return {
+    totalReservations: totalReservations || 0,
+    totalRevenue,
+    pendingPaymentsCount: pendingPaymentsCount || 0,
+    confirmedCount: confirmedCount || 0,
+    upcomingCheckInsCount: upcomingCheckInsCount || 0,
   };
 }
 

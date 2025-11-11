@@ -85,6 +85,68 @@ export const appRouter = router({
           await db.deleteReservation(input.id);
           return { success: true };
         }),
+      
+      stats: adminProcedure
+        .query(async () => {
+          return db.getReservationStats();
+        }),
+      
+      updateStatus: adminProcedure
+        .input(z.object({
+          id: z.string(),
+          status: z.enum(['confirmed', 'completed', 'cancelled']),
+          reason: z.string().optional(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          if (input.status === 'cancelled' && input.reason) {
+            await db.cancelReservation(input.id as any, input.reason, ctx.user.authId);
+          } else {
+            await db.updateReservation(input.id as any, { status: input.status });
+          }
+          return { success: true };
+        }),
+      
+      // Comprehensive update for status, payment, notes
+      updateReservation: adminProcedure
+        .input(z.object({
+          id: z.string(),
+          status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']).optional(),
+          paymentStatus: z.enum(['pending', 'paid', 'failed', 'refunded']).optional(),
+          adminNotes: z.string().optional(),
+          cancellationReason: z.string().optional(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          const updates: any = {};
+          
+          // Handle status update (including cancellation)
+          if (input.status) {
+            if (input.status === 'cancelled' && input.cancellationReason) {
+              await db.cancelReservation(input.id as any, input.cancellationReason, ctx.user.authId);
+              // Cancellation handled, don't update status again below
+            } else if (input.status === 'cancelled' && !input.cancellationReason) {
+              throw new Error('Cancellation reason is required when cancelling a reservation');
+            } else {
+              updates.status = input.status;
+            }
+          }
+          
+          // Handle payment status update
+          if (input.paymentStatus !== undefined) {
+            updates.payment_status = input.paymentStatus;
+          }
+          
+          // Handle admin notes update
+          if (input.adminNotes !== undefined) {
+            updates.admin_notes = input.adminNotes;
+          }
+          
+          // Apply updates if any (skip if already cancelled above)
+          if (Object.keys(updates).length > 0 && input.status !== 'cancelled') {
+            await db.updateReservation(input.id as any, updates);
+          }
+          
+          return { success: true };
+        }),
     }),
 
     // Gestion des expériences
@@ -423,6 +485,11 @@ export const appRouter = router({
         }))
         .query(async ({ ctx, input }) => {
           return db.getReservationsByCompanyPaginated(ctx.partner.company, input);
+        }),
+      
+      stats: hotelPartnerProcedure
+        .query(async ({ ctx }) => {
+          return db.getPartnerReservationStats(ctx.partner.company);
         }),
     }),
 
