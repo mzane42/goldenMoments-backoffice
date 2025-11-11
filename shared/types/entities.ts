@@ -15,7 +15,7 @@ export type PartnerStatus = 'active' | 'inactive' | 'pending';
 export type NotificationType = 'booking' | 'payment' | 'review' | 'system' | 'marketing';
 export type PaymentMethod = 'card' | 'bank_transfer' | 'paypal' | 'other';
 export type PaymentStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'refunded';
-export type ReservationStatus = 'confirmed' | 'cancelled' | 'completed';
+export type ReservationStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 export type ReservationPaymentStatus = 'pending' | 'paid' | 'refunded' | 'failed';
 
 // Location type (stored as JSONB)
@@ -98,6 +98,47 @@ export interface Experience {
   createdBy: UUID | null;
   lastModifiedBy: UUID | null;
   partnerId: UUID | null;
+  allowedNights: number[]; // Allowed night durations (e.g., [1,2,3] = flexible, [2] = 2-nights only)
+  isFeatured: boolean; // Marks experiences to be featured in the golden-moments section. Multiple experiences can be featured.
+}
+
+// Guest Detail (stored as JSONB array in reservations)
+export interface GuestDetail {
+  fullName: string;
+  email: string;
+  phone: string;
+  specialRequests?: string;
+}
+
+// Extra item selected for reservation
+export interface SelectedExtra {
+  id: string;
+  label: string;
+  price: number;
+  quantity: number;
+}
+
+// Price Breakdown (stored as JSONB in reservations)
+export interface PriceBreakdown {
+  nights?: number;
+  roomType?: string;
+  nightlyRates?: Array<{
+    date: string;
+    price: number;
+  }>;
+  subtotal?: number;
+  extras?: Array<{
+    label: string;
+    price: number;
+    quantity: number;
+  }>;
+  extrasTotal?: number;
+  total?: number;
+  tax?: number;
+  discounts?: number;
+  finalRate?: number;
+  pretaxRate?: number;
+  discountedRate?: number;
 }
 
 // Reservation entity
@@ -119,6 +160,13 @@ export interface Reservation {
   cancellationReason: string | null;
   cancelledBy: UUID | null;
   cancelledAt: Timestamp | null;
+  roomTypeId: UUID | null;
+  nights: number | null;
+  priceBreakdown: PriceBreakdown | null;
+  numberOfRooms: number;
+  guestDetails: GuestDetail[];
+  selectedExtras: SelectedExtra[];
+  numberOfNights: number | null;
 }
 
 // Review entity
@@ -224,6 +272,7 @@ export interface AvailabilityPeriod {
 export interface ReservationWithRelations extends Reservation {
   user?: User;
   experience?: Experience;
+  roomTypeDetails?: RoomType;
 }
 
 export interface ExperienceWithRelations extends Experience {

@@ -64,6 +64,11 @@ export const extraItemSchema = z.object({
 // Extras schema
 export const extrasSchema = z.array(extraItemSchema).optional().default([]);
 
+// Payment methods schema
+export const paymentMethodsSchema = z.array(
+  z.enum(['pay_at_hotel', 'card', 'apple_pay', 'dahbia', 'bank_transfer'])
+).min(1, 'Au moins une méthode de paiement doit être sélectionnée').default(['pay_at_hotel']);
+
 // Main experience creation schema
 export const createExperienceSchema = z.object({
   title: z.string().min(3, 'Le titre doit contenir au moins 3 caractères'),
@@ -81,11 +86,14 @@ export const createExperienceSchema = z.object({
   additional_info: additionalInfoSchema.optional(),
   schedules: schedulesSchema.optional(),
   extras: extrasSchema.optional(),
+  allowed_nights: z.array(z.number().int().positive().max(30)).min(1, 'Au moins une durée de nuit doit être sélectionnée').default([1, 2, 3]),
+  payment_methods: paymentMethodsSchema.optional(),
   date_start: z.string().optional(),
   date_end: z.string().optional(),
   company: z.string().optional(),
   status: z.enum(['active', 'inactive']),
   partner_id: z.string().uuid().optional().nullable(),
+  is_featured: z.boolean().optional().default(false),
 });
 
 // Update experience schema (all fields optional except id)

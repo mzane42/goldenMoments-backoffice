@@ -14,6 +14,22 @@ CREATE TABLE public.admins (
   CONSTRAINT admins_pkey PRIMARY KEY (id),
   CONSTRAINT admins_auth_id_fkey FOREIGN KEY (auth_id) REFERENCES auth.users(id)
 );
+CREATE TABLE public.availability_periods (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  experience_id uuid NOT NULL,
+  room_type_id uuid NOT NULL,
+  date date NOT NULL,
+  price numeric NOT NULL CHECK (price >= 0::numeric),
+  original_price numeric NOT NULL CHECK (original_price >= 0::numeric),
+  discount_percentage integer DEFAULT 0 CHECK (discount_percentage >= 0 AND discount_percentage <= 100),
+  available_rooms integer NOT NULL DEFAULT 1 CHECK (available_rooms >= 0),
+  is_available boolean DEFAULT true,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT availability_periods_pkey PRIMARY KEY (id),
+  CONSTRAINT availability_periods_experience_id_fkey FOREIGN KEY (experience_id) REFERENCES public.experiences(id),
+  CONSTRAINT availability_periods_room_type_id_fkey FOREIGN KEY (room_type_id) REFERENCES public.room_types(id)
+);
 CREATE TABLE public.experiences (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   title text NOT NULL,
@@ -41,6 +57,11 @@ CREATE TABLE public.experiences (
   created_by uuid,
   last_modified_by uuid,
   partner_id uuid,
+  default_price numeric CHECK (default_price >= 0::numeric),
+  extras jsonb DEFAULT '[]'::jsonb,
+  allowed_nights ARRAY DEFAULT '{1,2,3}'::integer[],
+  payment_methods jsonb DEFAULT '["pay_at_hotel"]'::jsonb,
+  is_featured boolean DEFAULT false,
   CONSTRAINT experiences_pkey PRIMARY KEY (id),
   CONSTRAINT experiences_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id),
   CONSTRAINT experiences_last_modified_by_fkey FOREIGN KEY (last_modified_by) REFERENCES auth.users(id),
@@ -80,7 +101,7 @@ CREATE TABLE public.payments (
   reservation_id uuid,
   amount numeric NOT NULL CHECK (amount >= 0::numeric),
   currency text NOT NULL DEFAULT 'EUR'::text,
-  payment_method text NOT NULL CHECK (payment_method = ANY (ARRAY['card'::text, 'bank_transfer'::text, 'paypal'::text, 'other'::text])),
+  payment_method text NOT NULL CHECK (payment_method = ANY (ARRAY['card'::text, 'bank_transfer'::text, 'paypal'::text, 'pay_at_hotel'::text, 'other'::text])),
   payment_status text NOT NULL DEFAULT 'pending'::text CHECK (payment_status = ANY (ARRAY['pending'::text, 'processing'::text, 'completed'::text, 'failed'::text, 'refunded'::text])),
   transaction_id text UNIQUE,
   payment_provider text,
@@ -101,21 +122,28 @@ CREATE TABLE public.reservations (
   booking_reference text NOT NULL UNIQUE,
   check_in_date timestamp with time zone NOT NULL,
   check_out_date timestamp with time zone NOT NULL,
-  room_type text NOT NULL,
+  room_type text,
   guest_count integer NOT NULL DEFAULT 2 CHECK (guest_count > 0),
   total_price numeric NOT NULL CHECK (total_price >= 0::numeric),
-  status text NOT NULL DEFAULT 'confirmed'::text CHECK (status = ANY (ARRAY['confirmed'::text, 'cancelled'::text, 'completed'::text])),
-  payment_status text NOT NULL DEFAULT 'paid'::text CHECK (payment_status = ANY (ARRAY['pending'::text, 'paid'::text, 'refunded'::text, 'failed'::text])),
+  status text NOT NULL DEFAULT 'completed'::text CHECK (status = ANY (ARRAY['confirmed'::text, 'cancelled'::text, 'completed'::text])),
+  payment_status text NOT NULL DEFAULT 'pending'::text CHECK (payment_status = ANY (ARRAY['pending'::text, 'paid'::text, 'refunded'::text, 'failed'::text])),
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   admin_notes text,
   cancellation_reason text,
   cancelled_by uuid,
   cancelled_at timestamp with time zone,
+  room_type_id uuid,
+  nights integer CHECK (nights > 0 AND nights <= 30),
+  price_breakdown jsonb DEFAULT '{}'::jsonb,
+  number_of_rooms integer NOT NULL DEFAULT 1 CHECK (number_of_rooms > 0),
+  guest_details jsonb DEFAULT '[]'::jsonb,
+  selected_extras jsonb DEFAULT '[]'::jsonb,
   CONSTRAINT reservations_pkey PRIMARY KEY (id),
   CONSTRAINT reservations_experience_id_fkey FOREIGN KEY (experience_id) REFERENCES public.experiences(id),
   CONSTRAINT reservations_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
-  CONSTRAINT reservations_cancelled_by_fkey FOREIGN KEY (cancelled_by) REFERENCES auth.users(id)
+  CONSTRAINT reservations_cancelled_by_fkey FOREIGN KEY (cancelled_by) REFERENCES auth.users(id),
+  CONSTRAINT reservations_room_type_id_fkey FOREIGN KEY (room_type_id) REFERENCES public.room_types(id)
 );
 CREATE TABLE public.reviews (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -136,6 +164,23 @@ CREATE TABLE public.reviews (
   CONSTRAINT reviews_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id),
   CONSTRAINT reviews_reservation_id_fkey FOREIGN KEY (reservation_id) REFERENCES public.reservations(id)
 );
+CREATE TABLE public.room_types (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  experience_id uuid NOT NULL,
+  name text NOT NULL,
+  description text,
+  base_capacity integer NOT NULL DEFAULT 2 CHECK (base_capacity > 0),
+  max_capacity integer NOT NULL DEFAULT 4,
+  amenities jsonb DEFAULT '{}'::jsonb,
+  images ARRAY DEFAULT ARRAY[]::text[],
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  size integer,
+  bed_type text,
+  extras jsonb DEFAULT '[]'::jsonb,
+  CONSTRAINT room_types_pkey PRIMARY KEY (id),
+  CONSTRAINT room_types_experience_id_fkey FOREIGN KEY (experience_id) REFERENCES public.experiences(id)
+);
 CREATE TABLE public.users (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   full_name text,
@@ -148,7 +193,34 @@ CREATE TABLE public.users (
   auth_id text NOT NULL,
   CONSTRAINT users_pkey PRIMARY KEY (id)
 );
-
+CREATE TABLE public.video_productions (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  video_url text NOT NULL,
+  file_size_bytes bigint,
+  duration_seconds integer NOT NULL,
+  title text NOT NULL,
+  genre text NOT NULL,
+  era text NOT NULL,
+  difficulty text CHECK (difficulty = ANY (ARRAY['easy'::text, 'medium'::text, 'hard'::text])),
+  total_songs integer NOT NULL DEFAULT 10,
+  status text DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'downloading_media'::text, 'rendering'::text, 'uploading'::text, 'ready_for_publish'::text, 'publishing'::text, 'published'::text, 'failed'::text])),
+  youtube_video_id text UNIQUE,
+  youtube_url text,
+  youtube_published_at timestamp with time zone,
+  youtube_views integer DEFAULT 0,
+  youtube_likes integer DEFAULT 0,
+  youtube_comments integer DEFAULT 0,
+  metadata jsonb,
+  ai_metadata jsonb,
+  error_message text,
+  error_details jsonb,
+  retry_count integer DEFAULT 0,
+  created_by uuid,
+  CONSTRAINT video_productions_pkey PRIMARY KEY (id),
+  CONSTRAINT video_productions_created_by_fkey FOREIGN KEY (created_by) REFERENCES auth.users(id)
+);
 CREATE TABLE public.waitlist (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
   first_name text NOT NULL,

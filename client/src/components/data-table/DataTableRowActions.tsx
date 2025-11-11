@@ -47,20 +47,20 @@ export function DataTableRowActions({
           <span className="sr-only">Ouvrir le menu</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-[160px]">
+      <DropdownMenuContent align="end" className="w-[200px]">
         <DropdownMenuLabel>Actions</DropdownMenuLabel>
         <DropdownMenuSeparator />
         
-        {onView && (
+        {/* {onView && (
           <DropdownMenuItem onClick={onView}>
-            <Eye className="mr-2 h-8 w-8" />
+            <Eye className="mr-2 h-4 w-4" />
             Voir détails
           </DropdownMenuItem>
-        )}
+        )} */}
         
         {onEdit && (
           <DropdownMenuItem onClick={onEdit}>
-            <Pencil className="mr-2 h-8 w-8" />
+            <Pencil className="mr-2 h-4 w-4" />
             Modifier les informations
           </DropdownMenuItem>
         )}
@@ -81,8 +81,9 @@ export function DataTableRowActions({
         {onDelete && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onDelete} className="text-destructive">
-              <Trash2 className="mr-2 h-8 w-8" />
+            {/* make it red */}
+            <DropdownMenuItem onClick={onDelete} className="text-destructive text-red-600 ">
+              <Trash2 className="mr-2 h-4 w-4 text-red-700" />
               Supprimer
             </DropdownMenuItem>
           </>

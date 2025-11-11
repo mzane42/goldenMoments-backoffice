@@ -172,7 +172,7 @@ export function ManageRoomTypesDialog({
         maxCapacity: formData.max_capacity,
         size: formData.size ? parseInt(formData.size) : null,
         bedType: formData.bed_type || null,
-        amenities: amenitiesArray.length > 0 ? amenitiesArray : null,
+        amenities: amenitiesArray.length > 0 ? amenitiesArray : undefined,
         images: uploadedImageUrls.length > 0 ? allImages : undefined,
       });
     }

@@ -34,6 +34,12 @@ export const appRouter = router({
     }),
 
     // Gestion des réservations
+    // NOTE: Reservation creation with night validation and pricing
+    // When creating reservations, use these helper functions from db.ts:
+    // - validateNightSelection(experienceId, nights) - Validates nights against experience.allowed_nights
+    // - calculateReservationPrice(params) - Calculates total price with breakdown from availability_periods
+    // - calculateNights(checkInDate, checkOutDate) - Helper to calculate night count
+    // The reservation should include: room_type_id, nights, price_breakdown, total_price
     reservations: router({
       list: adminProcedure
         .input(z.object({
@@ -79,6 +85,68 @@ export const appRouter = router({
           await db.deleteReservation(input.id);
           return { success: true };
         }),
+      
+      stats: adminProcedure
+        .query(async () => {
+          return db.getReservationStats();
+        }),
+      
+      updateStatus: adminProcedure
+        .input(z.object({
+          id: z.string(),
+          status: z.enum(['confirmed', 'completed', 'cancelled']),
+          reason: z.string().optional(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          if (input.status === 'cancelled' && input.reason) {
+            await db.cancelReservation(input.id as any, input.reason, ctx.user.authId);
+          } else {
+            await db.updateReservation(input.id as any, { status: input.status });
+          }
+          return { success: true };
+        }),
+      
+      // Comprehensive update for status, payment, notes
+      updateReservation: adminProcedure
+        .input(z.object({
+          id: z.string(),
+          status: z.enum(['pending', 'confirmed', 'completed', 'cancelled']).optional(),
+          paymentStatus: z.enum(['pending', 'paid', 'failed', 'refunded']).optional(),
+          adminNotes: z.string().optional(),
+          cancellationReason: z.string().optional(),
+        }))
+        .mutation(async ({ input, ctx }) => {
+          const updates: any = {};
+          
+          // Handle status update (including cancellation)
+          if (input.status) {
+            if (input.status === 'cancelled' && input.cancellationReason) {
+              await db.cancelReservation(input.id as any, input.cancellationReason, ctx.user.authId);
+              // Cancellation handled, don't update status again below
+            } else if (input.status === 'cancelled' && !input.cancellationReason) {
+              throw new Error('Cancellation reason is required when cancelling a reservation');
+            } else {
+              updates.status = input.status;
+            }
+          }
+          
+          // Handle payment status update
+          if (input.paymentStatus !== undefined) {
+            updates.payment_status = input.paymentStatus;
+          }
+          
+          // Handle admin notes update
+          if (input.adminNotes !== undefined) {
+            updates.admin_notes = input.adminNotes;
+          }
+          
+          // Apply updates if any (skip if already cancelled above)
+          if (Object.keys(updates).length > 0 && input.status !== 'cancelled') {
+            await db.updateReservation(input.id as any, updates);
+          }
+          
+          return { success: true };
+        }),
     }),
 
     // Gestion des expériences
@@ -94,24 +162,45 @@ export const appRouter = router({
         .query(async ({ input }) => {
           return db.getExperiencesPaginated(input);
         }),
-      
+
       create: adminProcedure
         .input(z.any())
         .mutation(async ({ input, ctx }) => {
+          // Validate allowed_nights if provided
+          if (input.allowed_nights) {
+            if (!Array.isArray(input.allowed_nights) || input.allowed_nights.length === 0) {
+              throw new Error('allowed_nights must be a non-empty array');
+            }
+            if (!input.allowed_nights.every((n: number) => Number.isInteger(n) && n > 0 && n <= 30)) {
+              throw new Error('allowed_nights must contain positive integers between 1 and 30');
+            }
+          }
+
           const experience = await db.createExperience({
             ...input,
+            allowed_nights: input.allowed_nights || [1, 2, 3], // Default: flexible booking
             created_by: ctx.user.authId,
             last_modified_by: ctx.user.authId,
           });
           return experience;
         }),
-      
+
       update: adminProcedure
         .input(z.object({
           id: z.string(),
           updates: z.any(),
         }))
         .mutation(async ({ input, ctx }) => {
+          // Validate allowed_nights if being updated
+          if (input.updates.allowed_nights) {
+            if (!Array.isArray(input.updates.allowed_nights) || input.updates.allowed_nights.length === 0) {
+              throw new Error('allowed_nights must be a non-empty array');
+            }
+            if (!input.updates.allowed_nights.every((n: number) => Number.isInteger(n) && n > 0 && n <= 30)) {
+              throw new Error('allowed_nights must contain positive integers between 1 and 30');
+            }
+          }
+
           await db.updateExperience(input.id, {
             ...input.updates,
             last_modified_by: ctx.user.authId,
@@ -396,6 +485,11 @@ export const appRouter = router({
         }))
         .query(async ({ ctx, input }) => {
           return db.getReservationsByCompanyPaginated(ctx.partner.company, input);
+        }),
+      
+      stats: hotelPartnerProcedure
+        .query(async ({ ctx }) => {
+          return db.getPartnerReservationStats(ctx.partner.company);
         }),
     }),
 

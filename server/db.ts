@@ -1,4 +1,5 @@
 import { supabaseAdmin } from './supabase';
+import { BadRequestError } from '../shared/_core/errors';
 
 // =====================================================
 // TYPES
@@ -461,7 +462,8 @@ export async function getAllReservations() {
     .select(`
       *,
       experience:experiences(*),
-      user:users(*)
+      user:users(*),
+      roomTypeDetails:room_types(*)
     `)
     .order('created_at', { ascending: false });
 
@@ -483,7 +485,8 @@ export async function getReservationsPaginated(params: PaginationParams): Promis
     .select(`
       *,
       experience:experiences(*),
-      user:users(*)
+      user:users(*),
+      roomTypeDetails:room_types(*)
     `, { count: 'exact' });
 
   // Apply search filter
@@ -519,7 +522,8 @@ export async function getReservationsByCompany(company: string) {
     .select(`
       *,
       experience:experiences!inner(*),
-      user:users(*)
+      user:users(*),
+      roomTypeDetails:room_types(*)
     `)
     .eq('experience.company', company)
     .order('created_at', { ascending: false });
@@ -545,7 +549,8 @@ export async function getReservationsByCompanyPaginated(
     .select(`
       *,
       experience:experiences!inner(*),
-      user:users(*)
+      user:users(*),
+      roomTypeDetails:room_types(*)
     `, { count: 'exact' })
     .eq('experience.company', company);
 
@@ -710,11 +715,119 @@ export async function getReservationStats() {
     ? ((cancelledCount || 0) / totalReservations * 100).toFixed(2)
     : "0.00";
 
+  // Total revenue
+  const { data: allReservations } = await supabaseAdmin
+    .from('reservations')
+    .select('total_price')
+    .neq('status', 'cancelled');
+
+  const totalRevenue = allReservations?.reduce((sum, r) => sum + (r.total_price || 0), 0) || 0;
+
+  // Pending payments count
+  const { count: pendingPaymentsCount } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .eq('payment_status', 'pending')
+    .neq('status', 'cancelled');
+
+  // Confirmed reservations count
+  const { count: confirmedCount } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .eq('status', 'confirmed');
+
+  // Upcoming check-ins (next 7 days)
+  const now = new Date();
+  const next7Days = new Date();
+  next7Days.setDate(next7Days.getDate() + 7);
+
+  const { count: upcomingCheckInsCount } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .gte('check_in_date', now.toISOString())
+    .lte('check_in_date', next7Days.toISOString())
+    .neq('status', 'cancelled');
+
   return {
     totalReservations: totalReservations || 0,
     monthlyGMV,
     cancelledCount: cancelledCount || 0,
-    cancellationRate
+    cancellationRate,
+    totalRevenue,
+    pendingPaymentsCount: pendingPaymentsCount || 0,
+    confirmedCount: confirmedCount || 0,
+    upcomingCheckInsCount: upcomingCheckInsCount || 0,
+  };
+}
+
+export async function getPartnerReservationStats(company: string) {
+  // Get experience IDs for this company
+  const { data: experiences } = await supabaseAdmin
+    .from('experiences')
+    .select('id')
+    .eq('company', company);
+
+  const experienceIds = experiences?.map(e => e.id) || [];
+
+  if (experienceIds.length === 0) {
+    return {
+      totalReservations: 0,
+      totalRevenue: 0,
+      pendingPaymentsCount: 0,
+      confirmedCount: 0,
+      upcomingCheckInsCount: 0,
+    };
+  }
+
+  // Total reservations for partner
+  const { count: totalReservations } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .in('experience_id', experienceIds);
+
+  // Total revenue
+  const { data: allReservations } = await supabaseAdmin
+    .from('reservations')
+    .select('total_price')
+    .in('experience_id', experienceIds)
+    .neq('status', 'cancelled');
+
+  const totalRevenue = allReservations?.reduce((sum, r) => sum + (r.total_price || 0), 0) || 0;
+
+  // Pending payments count
+  const { count: pendingPaymentsCount } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .in('experience_id', experienceIds)
+    .eq('payment_status', 'pending')
+    .neq('status', 'cancelled');
+
+  // Confirmed reservations count
+  const { count: confirmedCount } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .in('experience_id', experienceIds)
+    .eq('status', 'confirmed');
+
+  // Upcoming check-ins (next 7 days)
+  const now = new Date();
+  const next7Days = new Date();
+  next7Days.setDate(next7Days.getDate() + 7);
+
+  const { count: upcomingCheckInsCount } = await supabaseAdmin
+    .from('reservations')
+    .select('*', { count: 'exact', head: true })
+    .in('experience_id', experienceIds)
+    .gte('check_in_date', now.toISOString())
+    .lte('check_in_date', next7Days.toISOString())
+    .neq('status', 'cancelled');
+
+  return {
+    totalReservations: totalReservations || 0,
+    totalRevenue,
+    pendingPaymentsCount: pendingPaymentsCount || 0,
+    confirmedCount: confirmedCount || 0,
+    upcomingCheckInsCount: upcomingCheckInsCount || 0,
   };
 }
 
@@ -1068,4 +1181,151 @@ export async function getAvailabilitySummary(
   }
 
   return data || [];
+}
+
+// =====================================================
+// NIGHT OPTIONS & RESERVATION PRICING
+// =====================================================
+
+/**
+ * Calculate number of nights between two dates
+ */
+export function calculateNights(checkInDate: string, checkOutDate: string): number {
+  const checkIn = new Date(checkInDate);
+  const checkOut = new Date(checkOutDate);
+  
+  // Validate that dates are valid
+  if (Number.isNaN(checkIn.getTime()) || Number.isNaN(checkOut.getTime())) {
+    throw BadRequestError('Invalid check-in or check-out date');
+  }
+  
+  const diffTime = checkOut.getTime() - checkIn.getTime();
+  
+  // Ensure check-out is after check-in
+  if (diffTime <= 0) {
+    throw BadRequestError('Check-out date must be after check-in date');
+  }
+  
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Validate if the selected number of nights is allowed for an experience
+ */
+export async function validateNightSelection(
+  experienceId: string,
+  nights: number
+): Promise<{ valid: boolean; allowedNights: number[] }> {
+  const { data, error } = await supabaseAdmin
+    .from('experiences')
+    .select('allowed_nights')
+    .eq('id', experienceId)
+    .single();
+
+  if (error) {
+    console.error('[Database] Error fetching experience allowed_nights:', error);
+    throw error;
+  }
+
+  const allowedNights = data?.allowed_nights || [1, 2, 3];
+  const valid = allowedNights.includes(nights);
+
+  return { valid, allowedNights };
+}
+
+/**
+ * Calculate reservation price with detailed breakdown
+ */
+export async function calculateReservationPrice(params: {
+  experienceId: string;
+  roomTypeId: string;
+  checkInDate: string;
+  checkOutDate: string;
+  extras?: Array<{ label: string; price: number; quantity: number }>;
+}): Promise<{
+  totalPrice: number;
+  priceBreakdown: {
+    nights: number;
+    roomType: string;
+    nightlyRates: Array<{ date: string; price: number }>;
+    subtotal: number;
+    extras?: Array<{ label: string; price: number; quantity: number }>;
+    extrasTotal?: number;
+    total: number;
+  };
+}> {
+  const { experienceId, roomTypeId, checkInDate, checkOutDate, extras } = params;
+
+  // Calculate number of nights
+  const nights = calculateNights(checkInDate, checkOutDate);
+
+  // Get room type details
+  const { data: roomType, error: roomTypeError } = await supabaseAdmin
+    .from('room_types')
+    .select('name')
+    .eq('id', roomTypeId)
+    .single();
+
+  if (roomTypeError) {
+    console.error('[Database] Error fetching room type:', roomTypeError);
+    throw roomTypeError;
+  }
+
+  // Get availability periods for the date range (excluding checkout date)
+  const availabilityPeriods = await getAvailabilityByDateRange(
+    experienceId,
+    checkInDate,
+    checkOutDate,
+    roomTypeId
+  );
+
+  // Build nightly rates array
+  const nightlyRates: Array<{ date: string; price: number }> = [];
+  let subtotal = 0;
+
+  // Generate array of dates from check-in to check-out (excluding checkout)
+  const checkIn = new Date(checkInDate);
+  const dates: string[] = [];
+  for (let i = 0; i < nights; i++) {
+    const currentDate = new Date(checkIn);
+    currentDate.setUTCDate(currentDate.getUTCDate() + i);
+    dates.push(currentDate.toISOString().split('T')[0]);
+  }
+
+  // Match dates with availability periods
+  for (const date of dates) {
+    const period = availabilityPeriods.find((p: any) => p.date === date);
+    if (!period) {
+      throw new Error(`No availability period found for date: ${date}`);
+    }
+    if (!period.is_available) {
+      throw new Error(`Selected date is not available: ${date}`);
+    }
+    nightlyRates.push({
+      date,
+      price: Number(period.price),
+    });
+    subtotal += Number(period.price);
+  }
+
+  // Calculate extras total
+  let extrasTotal = 0;
+  if (extras && extras.length > 0) {
+    extrasTotal = extras.reduce((sum, extra) => sum + extra.price * extra.quantity, 0);
+  }
+
+  // Calculate total
+  const totalPrice = subtotal + extrasTotal;
+
+  // Build price breakdown
+  const priceBreakdown = {
+    nights,
+    roomType: roomType.name,
+    nightlyRates,
+    subtotal,
+    ...(extras && extras.length > 0 && { extras, extrasTotal }),
+    total: totalPrice,
+  };
+
+  return { totalPrice, priceBreakdown };
 }
