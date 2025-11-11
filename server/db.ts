@@ -383,7 +383,7 @@ export async function getExperiencesByCompanyPaginated(
   };
 }
 
-export async function getExperienceById(id: number) {
+export async function getExperienceById(id: string) {
   const { data, error } = await supabaseAdmin
     .from('experiences')
     .select('*')
@@ -413,7 +413,7 @@ export async function createExperience(experience: any) {
   return data;
 }
 
-export async function updateExperience(id: number, updates: any) {
+export async function updateExperience(id: string, updates: any) {
   const { error } = await supabaseAdmin
     .from('experiences')
     .update(updates)
@@ -425,7 +425,7 @@ export async function updateExperience(id: number, updates: any) {
   }
 }
 
-export async function deleteExperience(id: number) {
+export async function deleteExperience(id: string) {
   const { error } = await supabaseAdmin
     .from('experiences')
     .delete()
@@ -978,6 +978,21 @@ export async function deleteAvailabilityPeriod(id: string) {
   }
 
   return true;
+}
+
+export async function getAvailabilityPeriodById(id: string) {
+  const { data, error } = await supabaseAdmin
+    .from('availability_periods')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error && error.code !== 'PGRST116') {
+    console.error('[Database] Error getting availability period:', error);
+    return undefined;
+  }
+
+  return data;
 }
 
 export async function getAvailabilitySummary(

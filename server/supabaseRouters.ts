@@ -108,7 +108,7 @@ export const appRouter = router({
       
       update: adminProcedure
         .input(z.object({
-          id: z.number(),
+          id: z.string(),
           updates: z.any(),
         }))
         .mutation(async ({ input, ctx }) => {
@@ -198,6 +198,109 @@ export const appRouter = router({
           return { success: true };
         }),
     }),
+
+    // Room Types - Admin can manage all room types
+    roomTypes: router({
+      list: adminProcedure
+        .input(z.object({
+          experienceId: z.string(),
+        }))
+        .query(async ({ input }) => {
+          return db.getRoomTypesByExperience(input.experienceId);
+        }),
+
+      create: adminProcedure
+        .input(z.object({
+          experience_id: z.string(),
+          name: z.string(),
+          description: z.string().optional(),
+          base_capacity: z.number().default(2),
+          max_capacity: z.number().default(4),
+          amenities: z.any().default({}),
+          images: z.array(z.string()).default([]),
+        }))
+        .mutation(async ({ input }) => {
+          return db.createRoomType(input);
+        }),
+
+      update: adminProcedure
+        .input(z.object({
+          id: z.string(),
+          updates: z.object({
+            name: z.string().optional(),
+            description: z.string().optional(),
+            base_capacity: z.number().optional(),
+            max_capacity: z.number().optional(),
+            amenities: z.any().optional(),
+            images: z.array(z.string()).optional(),
+          }),
+        }))
+        .mutation(async ({ input }) => {
+          return db.updateRoomType(input.id, input.updates);
+        }),
+
+      delete: adminProcedure
+        .input(z.object({ id: z.string() }))
+        .mutation(async ({ input }) => {
+          return db.deleteRoomType(input.id);
+        }),
+    }),
+
+    // Availability Management - Admin can manage all availability
+    availability: router({
+      getByExperience: adminProcedure
+        .input(z.object({
+          experienceId: z.string(),
+          startDate: z.string(),
+          endDate: z.string(),
+          roomTypeId: z.string().optional(),
+        }))
+        .query(async ({ input }) => {
+          return db.getAvailabilityByDateRange(
+            input.experienceId,
+            input.startDate,
+            input.endDate,
+            input.roomTypeId
+          );
+        }),
+
+      getSummary: adminProcedure
+        .input(z.object({
+          experienceId: z.string(),
+          month: z.number().min(1).max(12),
+          year: z.number(),
+        }))
+        .query(async ({ input }) => {
+          return db.getAvailabilitySummary(
+            input.experienceId,
+            input.month,
+            input.year
+          );
+        }),
+
+      bulkUpsert: adminProcedure
+        .input(z.object({
+          periods: z.array(z.object({
+            id: z.string().optional(),
+            experience_id: z.string(),
+            room_type_id: z.string(),
+            date: z.string(),
+            price: z.number(),
+            original_price: z.number(),
+            available_rooms: z.number(),
+            is_available: z.boolean(),
+          })),
+        }))
+        .mutation(async ({ input }) => {
+          return db.upsertAvailabilityPeriods(input.periods);
+        }),
+
+      delete: adminProcedure
+        .input(z.object({ id: z.string() }))
+        .mutation(async ({ input }) => {
+          return db.deleteAvailabilityPeriod(input.id);
+        }),
+    }),
   }),
 
   // Routes Partenaire Hôtelier
@@ -237,7 +340,7 @@ export const appRouter = router({
       
       update: hotelPartnerProcedure
         .input(z.object({
-          id: z.number(),
+          id: z.string(),
           updates: z.object({
             price: z.number().optional(),
             date_start: z.string().optional(),
@@ -427,22 +530,53 @@ export const appRouter = router({
           })),
         }))
         .mutation(async ({ input, ctx }) => {
-          // Verify all experiences belong to partner
-          const experienceIds = [...new Set(input.periods.map(p => p.experience_id))];
-          for (const expId of experienceIds) {
-            const experience = await db.getExperienceById(expId);
+          // Comprehensive ownership validation for each period
+          for (const period of input.periods) {
+            // 1. Validate experience ownership
+            const experience = await db.getExperienceById(period.experience_id);
             if (!experience || experience.company !== ctx.partner.company) {
               throw new Error("Expérience non trouvée ou accès refusé");
             }
+
+            // 2. Validate room type belongs to the experience
+            const roomType = await db.getRoomTypeById(period.room_type_id);
+            if (!roomType) {
+              throw new Error("Type de chambre non trouvé");
+            }
+            if (roomType.experienceId !== period.experience_id) {
+              throw new Error("Type de chambre invalide pour cette expérience");
+            }
+
+            // 3. If updating existing period, validate ownership
+            if (period.id) {
+              const existingPeriod = await db.getAvailabilityPeriodById(period.id);
+              if (!existingPeriod) {
+                throw new Error("Période de disponibilité non trouvée");
+              }
+              if (existingPeriod.experience_id !== period.experience_id) {
+                throw new Error("Accès refusé");
+              }
+            }
           }
+
           return db.upsertAvailabilityPeriods(input.periods);
         }),
 
       delete: hotelPartnerProcedure
         .input(z.object({ id: z.string() }))
         .mutation(async ({ input, ctx }) => {
-          // Note: We should verify ownership but it's complex
-          // RLS will handle security at DB level
+          // Verify ownership before deletion
+          const period = await db.getAvailabilityPeriodById(input.id);
+          if (!period) {
+            throw new Error("Période de disponibilité non trouvée");
+          }
+
+          // Verify the period's experience belongs to partner
+          const experience = await db.getExperienceById(period.experience_id);
+          if (!experience || experience.company !== ctx.partner.company) {
+            throw new Error("Accès refusé");
+          }
+
           return db.deleteAvailabilityPeriod(input.id);
         }),
     }),

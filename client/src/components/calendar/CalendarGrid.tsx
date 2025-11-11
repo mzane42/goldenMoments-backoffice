@@ -8,6 +8,7 @@ import { DateCell } from './DateCell';
 import type { AvailabilityPeriod } from '@/../../shared/types/entities';
 import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Calendar, CalendarDays } from 'lucide-react';
+import { localDateKey } from '@/lib/utils';
 
 interface CalendarGridProps {
   currentMonth: Date;
@@ -50,13 +51,13 @@ export function CalendarGrid({
   today.setHours(0, 0, 0, 0);
 
   const getAvailabilityForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = localDateKey(date);
     return availability.find(a => a.date === dateStr);
   };
 
   const isDateSelected = (date: Date) => {
     return selectedDates.some(
-      d => d.toISOString().split('T')[0] === date.toISOString().split('T')[0]
+      d => localDateKey(d) === localDateKey(date)
     );
   };
 
@@ -105,11 +106,16 @@ export function CalendarGrid({
     
     const touch = e.touches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
-    const dateStr = element?.getAttribute('data-date');
+    // Walk up the DOM tree to find the nearest ancestor with data-date attribute
+    // This is necessary on mobile where elementFromPoint often returns nested spans/divs
+    const target = element instanceof HTMLElement ? element.closest<HTMLElement>('[data-date]') : null;
+    const dateStr = target?.getAttribute('data-date');
     
     if (dateStr) {
       setHasDragged(true);
-      const date = new Date(dateStr);
+      // Parse YYYY-MM-DD string as local date (not UTC)
+      const [year, month, day] = dateStr.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
       const dates = getDatesInRange(dragStart, date);
       onDateSelect(dates);
     }
@@ -248,7 +254,7 @@ export function CalendarGrid({
                 date={date}
                 availability={getAvailabilityForDate(date)}
                 isSelected={isDateSelected(date)}
-                isToday={date.toISOString().split('T')[0] === today.toISOString().split('T')[0]}
+                isToday={localDateKey(date) === localDateKey(today)}
                 isPast={isPastDate(date)}
                 isCurrentMonth={isCurrentMonth(date)}
                 onSelect={handleDateClick}
@@ -269,7 +275,7 @@ export function CalendarGrid({
           {monthDates.map((date, index) => {
             const dateAvailability = getAvailabilityForDate(date);
             const isSelected = isDateSelected(date);
-            const isToday = date.toISOString().split('T')[0] === today.toISOString().split('T')[0];
+            const isToday = localDateKey(date) === localDateKey(today);
             const isPast = isPastDate(date);
             
             return (
@@ -277,7 +283,7 @@ export function CalendarGrid({
                 key={index}
                 onClick={() => !isPast && handleDateClick(date)}
                 onTouchStart={(e) => !isPast && handleTouchStart(date, e)}
-                data-date={date.toISOString().split('T')[0]}
+                data-date={localDateKey(date)}
                 disabled={isPast}
                 className={`
                   w-full p-4 rounded-lg border-2 text-left transition-all

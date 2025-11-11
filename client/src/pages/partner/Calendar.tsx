@@ -14,6 +14,7 @@ import { Calendar as CalendarIcon, RefreshCw } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { toast } from 'sonner';
 import type { RoomType } from '@/../../shared/types/entities';
+import { localDateKey } from '@/lib/utils';
 
 export default function PartnerCalendar() {
   const [currentMonth, setCurrentMonth] = React.useState(new Date());
@@ -58,8 +59,8 @@ export default function PartnerCalendar() {
   const { data: rawAvailability = [], refetch: refetchAvailability } = trpc.partner.availability.getByExperience.useQuery(
     {
       experienceId: selectedExperienceId || '',
-      startDate: startDate.toISOString().split('T')[0],
-      endDate: endDate.toISOString().split('T')[0],
+      startDate: localDateKey(startDate),
+      endDate: localDateKey(endDate),
       roomTypeId: selectedRoomTypeId || undefined,
     },
     { enabled: !!selectedExperienceId && !!selectedRoomTypeId }
@@ -102,8 +103,12 @@ export default function PartnerCalendar() {
   });
 
   const deleteRoomTypeMutation = trpc.partner.roomTypes.delete.useMutation({
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast.success('Type de chambre supprimé avec succès');
+      if (variables?.id === selectedRoomTypeId) {
+        setSelectedRoomTypeId(null);
+        setSelectedDates([]);
+      }
       refetchRoomTypes();
       setManageRoomTypesOpen(false);
     },
@@ -127,7 +132,7 @@ export default function PartnerCalendar() {
   const getInitialFormData = () => {
     if (selectedDates.length === 0) return null;
     
-    const firstDate = selectedDates[0].toISOString().split('T')[0];
+    const firstDate = localDateKey(selectedDates[0]);
     const existingAvailability = availability.find((a: any) => a.date === firstDate);
     
     if (existingAvailability) {
@@ -155,7 +160,7 @@ export default function PartnerCalendar() {
     const periods = selectedDates.map(date => ({
       experience_id: selectedExperienceId,
       room_type_id: selectedRoomTypeId,
-      date: date.toISOString().split('T')[0],
+      date: localDateKey(date),
       price: parseFloat(formData.price),
       original_price: parseFloat(formData.originalPrice),
       available_rooms: parseInt(formData.availableRooms),
@@ -187,7 +192,9 @@ export default function PartnerCalendar() {
     // Filter out null values and convert to expected format
     const cleanUpdates: any = {};
     if (updates.name !== undefined) cleanUpdates.name = updates.name;
-    if (updates.description !== undefined) cleanUpdates.description = updates.description || undefined;
+    if (updates.description !== undefined) {
+      cleanUpdates.description = updates.description === '' ? null : updates.description;
+    }
     if (updates.baseCapacity !== undefined) cleanUpdates.base_capacity = updates.baseCapacity;
     if (updates.maxCapacity !== undefined) cleanUpdates.max_capacity = updates.maxCapacity;
     if (updates.amenities !== undefined) cleanUpdates.amenities = updates.amenities;

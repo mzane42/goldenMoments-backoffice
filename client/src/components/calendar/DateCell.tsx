@@ -4,7 +4,7 @@
  */
 
 import * as React from 'react';
-import { cn } from '@/lib/utils';
+import { cn, localDateKey } from '@/lib/utils';
 import type { AvailabilityPeriod } from '@/../../shared/types/entities';
 
 interface DateCellProps {
@@ -77,7 +77,7 @@ export function DateCell({
       onMouseDown={handleMouseDown}
       onMouseEnter={handleMouseEnter}
       onTouchStart={handleTouchStart}
-      data-date={date.toISOString().split('T')[0]}
+      data-date={localDateKey(date)}
       disabled={isPast}
       className={cn(
         'relative h-25 w-full border rounded-lg p-2 text-left transition-all select-none',
